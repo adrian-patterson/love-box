@@ -5,35 +5,39 @@
 
 # Repository Structure
 
-## `/lib`
+## `/Api`
 
-- All waveshare libraries
-  - These are taken right from the [waveshare/e-paper repo](https://github.com/waveshare/e-Paper)
-  - Contains a c shared library and python example for writing to the 7.5" display
+- Contains a simple flask API to serve requests for updating the message/picture for the display
+- `message.py` serves as a class  representing the database objects
+- `message_repository.py` serves as a repository for fetching and updating database values
+- `api.py` serves requests for updating or previewing messages/images from the UI (in the following section)
 
----
-
-## `/pic`
-
-- Contains pictures and fonts
-- Contains a python script to take any picture and resize it to the dimensions necessary for the 7.5" display
-  - Also converts the images to `.bmp` filetypes
 
 ---
 
-## `/src`
+## `/LoveBoxUi`
 
-- All source code
+- Contains a React application for easily changing the display picture 
+- The look:
+![image](https://user-images.githubusercontent.com/47571939/167021667-e28bef4f-c37d-4e7e-863e-f9327ca73744.png)
+- Or on mobile:
 
-### `/domain`
+![image](https://user-images.githubusercontent.com/47571939/167021748-930d9bcb-1317-4bc5-859c-ef41181d8780.png)
+- The UI allows: 
+  - Viewing the picture gallery, choose a picture and upload. Pictures are shuffled by default and can be reshuffled
+  - Selecting a font size and uploading a message (send button used for uploading)
+  - Selecting a font size and previewing where line breaks will be in message (with left preview button)
 
-- Contains a class representing `Message`, which is stored in the firebase real-time database
 
-### `/repository`
+---
 
-- Contains a repository for messages to update/read database values easily
+## `/RpiUpdateService`
 
-### `/shell_scripts`
+- Update service hosted on the raspberry Pi Zero W which controls the display
+- Python script which is run every 10 minutes to check database contents and update display accordingly
+- Script is called using a cronjob
+
+### `/ShellScripts`
 
 - `auto_update.sh`
   - Called every 24 hours using a cronjob to update raspberry pi with remote code
@@ -42,19 +46,27 @@
 - `install.sh`
   - Installs needed dependencies for the raspberry pi
 
-### Other
-
-- `change_message.py` allows one to change the contents in the real-time database, remotely
+### `/src`
 - `update_display.py` updates the display itself with the contents within the database
   - The time stored within the database is compared with the current time
   - If the database was last updated in the previous 10 minutes, then the display is changed
-- `message_preview.py` allows one to preview the message and how it will be displayed given a chosen font
+- `format_images.py` script allows one to drop JPEG images into the `/pic` library, and then transforms them to the dimensions required by the display (800x480)
+  - These images are also saved to the `/public` directory for the react app to be displayed on the website
+- `message.py` and `message_repository.py` are the same as found in the API
+- `/lib`
+  - All waveshare libraries
+        - These are taken right from the [waveshare/e-paper repo](https://github.com/waveshare/e-Paper)
+        - Contains a c shared library and python example for writing to the 7.5" display
+- `/pic`
+  - Where pictures are stored and read from
+- `/font`
+  - Stores font for display
 
 # Crontab Entries
 
-- `*/10 * * * * /home/pi/projects/love-box/shell_scripts/update_display.sh >> /home/pi/logs/update_display_log.txt 2>&1`
+- `*/10 * * * * /home/pi/projects/love-box/RpiUpdateService/ShellScripts/update_display.sh >> /home/pi/logs/update_display_log.txt 2>&1`
   - Ran every 10 minutes
-- `0 0 * * * /home/pi/projects/love-box/shell_scripts/auto_update.sh >> /home/pi/logs/git_log.txt 2>&1`
+- `0 0 * * * /home/pi/projects/love-box/RpiUpdateService/ShellScripts/auto_update.sh >> /home/pi/logs/git_log.txt 2>&1`
   - Ran once a day
 - Keep in mind that these paths are relative and will have to be adjusted based on where the repository files are stored on the raspberry pi
 
