@@ -185,6 +185,64 @@ pub(crate) fn em_scale(font: &FontRef<'_>, em_px: f32) -> PxScale {
     PxScale::from(em_px * font.height_unscaled() / upem)
 }
 
+/// Ascent and descent in pixels (descent is negative) at `em_px`.
+pub(crate) fn vertical_metrics(font: &FontRef<'_>, em_px: f32) -> (f32, f32) {
+    let scaled = font.as_scaled(em_scale(font, em_px));
+    (scaled.ascent(), scaled.descent())
+}
+
+/// Advance width of `text` in pixels at `em_px`, with kerning.
+pub(crate) fn text_width(font: &FontRef<'_>, em_px: f32, text: &str) -> f32 {
+    let scaled = font.as_scaled(em_scale(font, em_px));
+    let mut width = 0.0;
+    let mut prev: Option<GlyphId> = None;
+    for c in text.chars() {
+        let id = scaled.glyph_id(c);
+        if let Some(p) = prev {
+            width += scaled.kern(p, id);
+        }
+        width += scaled.h_advance(id);
+        prev = Some(id);
+    }
+    width
+}
+
+/// Greedy word wrap of one paragraph (words separated by single spaces) to `max_width`
+/// pixels. Returns `None` if any single word is wider than `max_width`.
+pub(crate) fn wrap_px(
+    font: &FontRef<'_>,
+    em_px: f32,
+    paragraph: &str,
+    max_width: f32,
+) -> Option<Vec<String>> {
+    let space = text_width(font, em_px, " ");
+    let mut lines = Vec::new();
+    let mut line = String::new();
+    let mut line_width = 0.0;
+    for word in paragraph.split(' ').filter(|w| !w.is_empty()) {
+        let w = text_width(font, em_px, word);
+        if w > max_width {
+            return None;
+        }
+        if line.is_empty() {
+            line.push_str(word);
+            line_width = w;
+        } else if line_width + space + w <= max_width {
+            line.push(' ');
+            line.push_str(word);
+            line_width += space + w;
+        } else {
+            lines.push(std::mem::take(&mut line));
+            line.push_str(word);
+            line_width = w;
+        }
+    }
+    if !line.is_empty() {
+        lines.push(line);
+    }
+    Some(lines)
+}
+
 /// An 800x480 coverage buffer (0 = paper, 1 = full ink) that text is drawn into with
 /// anti-aliasing and then thresholded to a [`Frame`] at 50%.
 pub(crate) struct Canvas {
@@ -291,6 +349,15 @@ mod tests {
             ["one-two-", "three-", "four x"]
         );
         assert_eq!(wrap("abcdefghij klm", 5, 2), ["abcde", "..."]);
+    }
+
+    #[test]
+    fn wrap_px_rejects_a_word_wider_than_the_line() {
+        let fonts = Fonts::bundled();
+        let font = fonts.default_face().font();
+        assert!(wrap_px(font, 20.0, &"x".repeat(500), 720.0).is_none());
+        let lines = wrap_px(font, 20.0, "one two three", 720.0).unwrap();
+        assert_eq!(lines, ["one two three"]);
     }
 
     #[test]

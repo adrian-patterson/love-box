@@ -5,9 +5,14 @@
 //! panel and `/api/preview`, so preview equals panel.
 
 mod message;
+mod quote;
 mod text;
 
-pub use self::message::{message_lines, MessageSize, MESSAGE_X};
+pub use self::message::{message_lines, MessageSize, BASELINE_EM, MESSAGE_X};
+pub use self::quote::{
+    fit_quote, normalise_whitespace, Align, QuoteLayout, QuoteSpec, QUOTE_LINE_HEIGHT,
+    QUOTE_MARGIN, QUOTE_MAX_CHARS, QUOTE_MAX_PX, QUOTE_MIN_PX,
+};
 
 use std::fmt;
 
@@ -26,6 +31,8 @@ pub enum Card {
         /// Font id or display name ([`Fonts::by_name`]); [`DEFAULT_FONT`] by default.
         font: String,
     },
+    /// A quote, auto-fitted to the frame.
+    Quote(QuoteSpec),
     /// An all-white frame.
     Clear,
 }
@@ -124,6 +131,11 @@ pub fn render(card: &Card, fonts: &Fonts) -> Result<Frame, RenderError> {
     match card {
         Card::Message { text, size, font } => {
             Ok(message::render_message(text, *size, face(fonts, font)?))
+        }
+        Card::Quote(spec) => {
+            let face = face(fonts, &spec.font)?;
+            let layout = quote::fit_quote(spec, face)?;
+            Ok(quote::draw_quote(&layout, face, spec.align))
         }
         Card::Clear => Ok(Frame::white()),
     }
