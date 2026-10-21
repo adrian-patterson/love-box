@@ -1,0 +1,27 @@
+# /etc/systemd/system/lovebox.service, installed by deploy/provision.sh.
+# Behaviour and paths: docs/PI-SETUP.md §4. UNVERIFIED as of U-101 (no systemd-analyze
+# on macOS); first `systemd-analyze verify` and first start are U-103.
+[Unit]
+Description=lovebox e-paper picture frame
+Documentation=https://github.com/adrian-patterson/love-box
+# After= orders only; Wants= is what pulls network-online.target into the boot.
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=lovebox
+SupplementaryGroups=spi gpio
+EnvironmentFile=-/etc/lovebox/secrets.env
+Environment=RUST_LOG=info
+ExecStart=/opt/lovebox/lovebox serve
+Restart=on-failure
+RestartSec=5
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/lovebox
+# Port 80 as a non-root user.
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+
+[Install]
+WantedBy=multi-user.target
