@@ -12,7 +12,10 @@ frame, one household, no cloud account.
 
 Status: **rewrite in progress.** The 2022 Python/React/Firebase implementation was removed
 from the tree in October 2026 (git tag `legacy-2022` holds the last commit that has it). What
-exists now is the M1 skeleton: a Rust crate that cross-builds for the Pi and a deploy kit.
+exists now: a Rust crate that cross-builds for the Pi, a deploy kit, and the start of the
+renderer (frame type, `Panel` trait with a PNG implementation, bundled fonts, message and
+quote cards). Work is paused; [docs/PLAN.md](docs/PLAN.md) "Where things stand" says
+what is done, parked, and next.
 The plan is in [docs/PLAN.md](docs/PLAN.md); durable decisions are in
 [docs/decisions/](docs/decisions/). Work on the next unfinished milestone there.
 
@@ -20,12 +23,14 @@ The plan is in [docs/PLAN.md](docs/PLAN.md); durable decisions are in
 
 | Path | What it is |
 |---|---|
-| `lovebox/` | The Rust crate (binary `lovebox`). M1: `serve` logs a startup line and heartbeats, exits 0 on SIGTERM. Later: axum API, renderer, panel driver, scheduler, store. |
+| `lovebox/` | The Rust crate: library (`frame`, `panel`, `fonts`, `render`) plus binary `lovebox`. `serve` logs a startup line and heartbeats, exits 0 on SIGTERM. Later: axum API, panel driver, scheduler, store. |
+| `lovebox/fonts/` | Bundled SIL OFL faces (EB Garamond, Libre Baskerville, Lora, Atkinson Hyperlegible), each with its `OFL.txt`; embedded with `include_bytes!`. |
+| `lovebox/tests/` | Integration tests; `golden.rs` compares rendered frames to `tests/golden/*.png` (regenerate with `UPDATE_GOLDENS=1`). |
 | `lovebox/.cargo/config.toml` | Pi-target rustflags only (`target-cpu=arm1176jzf-s`). Nothing global. |
 | `deploy/` | `lovebox.service` (systemd), `provision.sh` (runs on the Pi, idempotent), `deploy.sh` (build, verify ARMv6, ship, restart, rollback), `backup.sh`, `check-pi.sh`, `README.md`. |
 | `Makefile` | Developer entry points; see Commands. |
 | `rust-toolchain.toml` | Stable toolchain, `arm-unknown-linux-gnueabihf` target. |
-| `docs/` | `PLAN.md` (spec and milestones), `PI-SETUP.md` (blank card to running Pi), `RESEARCH.md` (sourced findings), `decisions/` (ADRs). |
+| `docs/` | `PLAN.md` (spec and milestones), `UI-DESIGN.md` (web UI design contract), `PI-SETUP.md` (blank card to running Pi), `RESEARCH.md` (sourced findings), `decisions/` (ADRs). |
 
 ## Target architecture (summary; details in docs/PLAN.md)
 
@@ -97,12 +102,13 @@ go through `make build-pi`. Never target `armv7-*`: it segfaults on the Zero W.
 - **Coordination between agent sessions**, when a project manager uses one, happens on an
   ephemeral board at `.tmp/agents-messaging-board/` (gitignored). Decisions that must
   outlive a checkout are copied to `docs/decisions/`.
-- Commit with `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>` when Claude wrote
-  the change.
+- Commit with a `Co-Authored-By: Claude <model> <noreply@anthropic.com>` trailer naming the
+  model that wrote the change, when Claude wrote it.
 
 ## Pointers
 
 - Plan and milestones: [docs/PLAN.md](docs/PLAN.md)
+- Web UI design (screens, tokens, states, API needs): [docs/UI-DESIGN.md](docs/UI-DESIGN.md)
 - Research with sources (Google Photos API status, Rust driver, toolchain): [docs/RESEARCH.md](docs/RESEARCH.md)
 - Pi provisioning runbook: [docs/PI-SETUP.md](docs/PI-SETUP.md)
 - Decisions: [docs/decisions/](docs/decisions/)

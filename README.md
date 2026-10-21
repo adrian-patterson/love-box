@@ -38,9 +38,10 @@ with no cloud account.
 - **Boring to operate**: one-command deploy from your laptop, a systemd service, a health
   page, backups, and everything testable on a laptop without the hardware.
 
-Status (October 2026): the rewrite is in progress. The toolchain, cross-build, and deploy
-kit exist (milestone M1); the panel driver, web app, and sources follow. Progress and
-design: [docs/PLAN.md](docs/PLAN.md).
+Status (October 2026): the rewrite is in progress and currently paused. The toolchain,
+cross-build, and deploy kit exist (milestone M1), and the renderer draws messages and
+auto-fitted quotes; photos, the panel driver, the web app, and sources follow. Progress
+and design: [docs/PLAN.md](docs/PLAN.md).
 
 ## Hardware
 

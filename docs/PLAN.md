@@ -86,6 +86,29 @@ The 2022 Python/React/Firebase code was removed from the tree on 2026-10-21 (tag
 `legacy-2022` holds the last commit with it). Its rendering baseline is recorded in
 AGENTS.md; nothing else from it is needed.
 
+## Where things stand (work paused 2026-10-21)
+
+Work is paused by the maintainer. Resume from this list; nothing is running.
+
+- **Done on `master`:** M0; U-101 (toolchain, crate skeleton, ARMv6 cross-build, deploy
+  kit); from U-201, the `Frame` type, the `Panel` trait with `PngPanel`, the bundled OFL
+  fonts, message cards (2022 sizes), and quote cards (auto-fit 14–120 px, attribution,
+  left or centred, five faces), all with golden-frame tests. `make test`, `make lint`,
+  `make build-pi`, and the ARMv6 check pass at the pause.
+- **Parked on branch `wip/U-201-photo`:** photo ingest, cover-crop, and dithering. Two of
+  its integration tests fail and it is not formatted; the commit message lists both
+  failures. Finish it, then add the `lovebox render` and `lovebox fonts` CLI subcommands
+  and `make render-samples` to close U-201.
+- **Designed, not built:** the web UI ([UI-DESIGN.md](UI-DESIGN.md)).
+- **Not started:** U-202 (Waveshare panel, compile-only), U-301 (server, store, API,
+  import CLI), U-302 (web UI), M4 onward.
+- **Blocked on hardware:** U-102 (flash the card) and U-103 (first SSH, provision,
+  deploy) wait for the microSD adapter and power supply.
+- **Open question for the maintainer:** with 40 px margins and a 14 px floor, a full
+  3,000-character quote does not fit in most bundled faces. Measured capacity at the floor
+  is about 2,150 (Libre Baskerville) to 3,000 (EB Garamond Italic) characters. Choose one:
+  lower the limit to about 2,000, shrink the margins, or lower the floor.
+
 ## Milestones
 
 Each milestone ends with an acceptance check the maintainer can do from a phone or a terminal.
@@ -107,7 +130,7 @@ hello-world — blocked on U-102.
 - Acceptance: `ssh lovebox.local` works; `systemctl status lovebox` is active; journal shows
   the hello binary's log line.
 
-### M2 — Renderer and panel  *(U-201 renderer + PNG panel can run without hardware)*
+### M2 — Renderer and panel  *(U-201 in progress: text cards done, photos parked; U-202 not started)*
 - `lovebox` crate gains the `Panel` trait, `PngPanel`, and (U-202, compile-only until the Pi
   is up) `WavesharePanel`.
 - **Renderer** produces the 800x480 1-bit `Frame` for every card type:
@@ -141,7 +164,8 @@ hello-world — blocked on U-102.
   resizes huge TIFF/JPEG files locally and POSTs them, card queue, pinned mode,
   `/api/preview`, `/healthz`.
 - UI: message composer with live preview, photo grid with upload, "showing now" header,
-  status page (uptime, last refresh, disk, temperature).
+  status page (uptime, last refresh, disk, temperature). Screens, tokens, states, and what
+  the UI needs from the API are specified in [UI-DESIGN.md](UI-DESIGN.md).
 - Acceptance: from a phone on Wi-Fi, send a message and upload a photo; the panel updates
   within 10 seconds of tapping send.
 
