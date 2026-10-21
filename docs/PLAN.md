@@ -35,8 +35,9 @@ specification of record; milestones get ticked here and decisions get recorded i
    32-bit Raspberry Pi OS Lite. Cross-compile from the Mac; never build on the Pi.
    Image processing must stay frugal: dither at 800x480 only, decode large uploads at a
    reduced scale, one worker thread.
-2. **Photo source priority: DECIDED — phone upload first (M3), Google Photos Picker import as
-   a spike (M5), Immich optional.** True album-follow is not possible via Google's API since
+2. **Photo source priority: DECIDED — phone upload (M3), then Google Photos Picker import
+   (M4, promoted on 2026-10-21 because the maintainer is on iPhone with all photos in Google
+   Photos), Immich optional.** True album-follow is not possible via Google's API since
    March 2025; see docs/RESEARCH.md §1–2.
 3. **Re-image the SD card: DECIDED — yes.** Clean 32-bit Raspberry Pi OS Lite, current
    stable release. The card has not been flashed yet as of 2026-10-21; the Pi is not on Wi-Fi.
@@ -123,22 +124,15 @@ hello-world — blocked on U-102.
 - Acceptance: from a phone on Wi-Fi, send a message and upload a photo; the panel updates
   within 10 seconds of tapping send.
 
-### M4 — Slideshow, scheduling, and quotes
-- **Slideshow mode**: cycles through a set (all photos, or a tag/album the user picks) in
-  shuffle or upload order. Interval is set in the UI: default 15 min; the normal control
-  ranges from 180 s (Waveshare's recommended minimum between refreshes) to 24 h; an
-  "advanced" toggle unlocks 15 s–180 s with a visible warning about panel wear and the
-  4 s flash on every change. Interval, order, set, and quiet hours persist in SQLite and
-  survive restarts; the scheduler catches up sensibly after a reboot (shows the next item,
-  does not burst through missed ones).
-- Daily mode (new card at a set time), quiet hours (no refresh in a nightly window; the
-  panel sleeps), a curated quotes list editable in the UI, quote render style (typographic
-  layout, author line).
-- Acceptance: set "slideshow every 3 min" with 5 photos, observe 3 changes in 9 min in the
-  right order; set "every 15 s" via advanced, see the warning and the fast cycle; set a
-  quiet window covering now, observe no change; set a quote, see it rendered.
+### M4 — Google Photos import *(promoted ahead of slideshow on 2026-10-21)*
 
-### M5 — Google Photos import *(spike, go/no-go)*
+Why this comes right after the web app: the maintainer's photos live in Google Photos and
+the phone is an iPhone, where "save to phone" from the Google Photos app downloads
+full-size originals and is slow. The Pi must fetch the photos itself. The Library API
+cannot do it: since 31 March 2025 its `albums.list`, `mediaItems.list`, and
+`mediaItems.search` return only content the calling app created
+(https://developers.google.com/photos/library/reference/rest), and the read-library scopes
+were removed. The Picker API is the only official route left.
 
 How it works (Google's Picker API; the Library API no longer exposes a user's albums to
 third-party apps, see docs/RESEARCH.md §1):
@@ -174,6 +168,26 @@ Acceptance: pick five photos on the phone, they appear in the library within a m
 second pick of the same photos adds nothing; the token still works 8 days after setup (or
 the doc says exactly what to re-run).
 
+Optional unit, built only if the token-status answer is bad: **shared-link importer**,
+labelled experimental in the UI. Paste a Google Photos "share album" link; the Pi scrapes
+the album page for preview-size image URLs and imports them. No OAuth, whole albums at
+once, breaks whenever Google changes the page. Never the default path.
+
+### M5 — Slideshow, scheduling, and quotes
+- **Slideshow mode**: cycles through a set (all photos, or a tag/album the user picks) in
+  shuffle or upload order. Interval is set in the UI: default 15 min; the normal control
+  ranges from 180 s (Waveshare's recommended minimum between refreshes) to 24 h; an
+  "advanced" toggle unlocks 15 s–180 s with a visible warning about panel wear and the
+  4 s flash on every change. Interval, order, set, and quiet hours persist in SQLite and
+  survive restarts; the scheduler catches up sensibly after a reboot (shows the next item,
+  does not burst through missed ones).
+- Daily mode (new card at a set time), quiet hours (no refresh in a nightly window; the
+  panel sleeps), a curated quotes list editable in the UI, quote render style (typographic
+  layout, author line).
+- Acceptance: set "slideshow every 3 min" with 5 photos, observe 3 changes in 9 min in the
+  right order; set "every 15 s" via advanced, see the warning and the fast cycle; set a
+  quiet window covering now, observe no change; set a quote, see it rendered.
+
 ### M6 — AI features *(each its own unit; pick from Ideas)*
 
 ### M7 — Operations polish
@@ -204,7 +218,7 @@ behind a config flag and a key in `/etc/lovebox/secrets.env`, and the frame work
 
 ## Risks
 
-- **Google OAuth app lifecycle** (unverified apps, token expiry). Contained in M5 as a spike.
+- **Google OAuth app lifecycle** (unverified apps, token expiry). Contained in M4 as a spike.
 - **ARMv6 toolchain friction** if staying on the Zero W. Mitigation: musl static target.
 - **Panel driver edge cases** (busy-wait with no timeout, wake-after-sleep ghosting).
   Mitigation: our own timeout wrapper, clear-on-wake, hardware test in M2 before anything

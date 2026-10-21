@@ -8,7 +8,10 @@ relying on it in a unit; APIs and crates move.
 **Verdict: not via the official API. Picking photos is supported; following an album is not.**
 
 - Since 31 March 2025 the Library API only lists, searches, and retrieves media *your app
-  created*. The broad `photoslibrary` and sharing scopes were removed.
+  created*. The broad `photoslibrary` and sharing scopes were removed. Checked again
+  2026-10-21: the reference page now describes `albums.list`, `mediaItems.list`, and
+  `mediaItems.search` as returning only content "your app created"
+  (https://developers.google.com/photos/library/reference/rest).
   Sources: [Google Photos API updates](https://developers.google.com/photos/support/updates),
   [Developers Blog: Picker API launch](https://developers.googleblog.com/en/google-photos-picker-api-launch-and-library-api-updates/).
 - The replacement is the **Picker API**: the app creates a session, the user opens a
@@ -27,7 +30,7 @@ relying on it in a unit; APIs and crates move.
 - Open risk for the Picker route: OAuth consent for an unverified app in "testing" mode
   expires refresh tokens after 7 days. Needs a spike to confirm whether the Picker scope
   is classed as non-sensitive (no verification needed) and whether "production" mode is
-  available without verification for a single-user app. Resolved in milestone M5.
+  available without verification for a single-user app. Resolved in milestone M4.
 
 **Practical implication:** the UX "pick photos on your phone and they appear on the frame"
 is achievable. The UX "add to this album and the frame picks it up on its own" needs a
