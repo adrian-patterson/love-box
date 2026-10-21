@@ -107,14 +107,33 @@ hello-world — blocked on U-102.
 - Acceptance: `ssh lovebox.local` works; `systemctl status lovebox` is active; journal shows
   the hello binary's log line.
 
-### M2 — Rust drives the panel
-- `lovebox` crate skeleton with `Panel` trait, `PngPanel`, `WavesharePanel`.
-- Renderer: text with the 2022 font sizes and wrap widths (AGENTS.md "Baseline"), an SIL
-  OFL serif bundled with `include_bytes!` (Palatino was not redistributable), photo with
-  Floyd–Steinberg dithering and cover-crop, "clear."
-- A CLI subcommand `lovebox show --text "hi"` / `--photo x.jpg` updates the real panel.
-- Acceptance: a photo and a 48pt message appear on the panel, no hang, panel sleeps after.
-  `cargo test` passes on the Mac with golden-frame tests.
+### M2 — Renderer and panel  *(U-201 renderer + PNG panel can run without hardware)*
+- `lovebox` crate gains the `Panel` trait, `PngPanel`, and (U-202, compile-only until the Pi
+  is up) `WavesharePanel`.
+- **Renderer** produces the 800x480 1-bit `Frame` for every card type:
+  - *Message*: the 2022 sizes and wrap widths (AGENTS.md "Baseline"), left-aligned.
+  - *Quote*: body text plus optional attribution line. **Font is configurable** from a
+    bundled set of SIL OFL faces (at least one classic serif, one modern serif, one
+    readable sans). **Size fits the content automatically**: the renderer searches for the
+    largest size at which the wrapped text fits the frame with margins, from a generous
+    maximum for a one-liner down to a floor around 14 px for a page of prose. Alignment
+    left or centred. **Maximum length ~3,000 characters** (roughly a book page); longer
+    input is rejected by the API with a clear message, never silently truncated.
+  - *Photo*: decode JPEG, PNG, TIFF (8- and 16-bit), BMP, WebP; cover-crop to 800x480
+    (optionally honour a focal point); grayscale with contrast normalisation; dither to
+    1-bit (Floyd–Steinberg default, Atkinson available). Sources are **very high
+    resolution** (tens of megapixels, TIFFs included) so decoding runs under explicit
+    memory limits sized for the Pi's 512 MB, and the server's upload path stores the
+    original only transiently: the library keeps a bounded ~1600x960 copy plus the
+    rendered frame. HEIC is not decoded on the Pi; iOS converts to JPEG at upload time,
+    and the laptop import CLI (M3) converts anything else.
+  - *Clear*: an all-white frame.
+- `lovebox render {message|quote|photo|clear} ... -o out.png` CLI for development and
+  golden tests; the same code path backs `/api/preview` in M3.
+- Acceptance (U-201, on a laptop): golden-frame tests pass for each card type; a 40 MP
+  JPEG and a 16-bit TIFF render under the memory limit; a 3,000-character quote renders
+  at the floor size and a 12-word quote renders large. (U-202, on the Pi, later): a photo
+  and a 48 pt message appear on the panel, no hang, panel sleeps after.
 
 ### M3 — Local web app replaces the old stack
 - axum server, SQLite store, photo library with upload (multipart; HEIC/JPEG/PNG), card
