@@ -8,12 +8,14 @@
 //!    error-diffuse to 1 bit.
 
 use std::fs::File;
-use std::io::{BufRead, BufReader, Cursor, Seek};
+use std::io::{BufRead, BufReader, Cursor, Read, Seek, SeekFrom};
 use std::path::Path;
 
 use image::imageops::{self, FilterType};
 use image::metadata::Orientation;
-use image::{DynamicImage, ImageDecoder, ImageError, ImageReader, Limits, Luma, RgbImage};
+use image::{
+    DynamicImage, ImageDecoder, ImageError, ImageFormat, ImageReader, Limits, Luma, RgbImage,
+};
 
 use super::dither::{dither, Dither, GrayF32};
 use super::RenderError;
@@ -30,8 +32,9 @@ pub struct IngestLimits {
     /// Largest accepted image, in pixels (width x height), checked from the header before
     /// decoding.
     pub max_pixels: u64,
-    /// Most bytes the decode may allocate: the decoded image plus the bounded copy.
-    /// Passed to `image::Limits::max_alloc`, so decoders refuse before allocating.
+    /// Budget for decoded pixels, JPEG working buffers and the bounded copy.
+    /// Also passed to `image::Limits::max_alloc`. Codec scratch space and allocator
+    /// overhead are not covered: this is not a process RSS ceiling.
     pub max_alloc: u64,
 }
 
@@ -51,8 +54,8 @@ impl IngestLimits {
         }
     }
 
-    /// Limits for the Pi Zero W: 80 MP, 160 MiB. A 24 MP JPEG (72 MB decoded) or a 40 MP
-    /// one (120 MB) fits; an 8-bit RGB image over ~55 MP does not.
+    /// Limits for the Pi Zero W: 80 MP, 160 MiB. Baseline JPEG uses reduced IDCT;
+    /// progressive JPEG reserves full-resolution coefficients and may be rejected.
     pub fn pi() -> Self {
         Self {
             max_pixels: Self::DEFAULT_MAX_PIXELS,
@@ -130,10 +133,10 @@ fn swaps_axes(orientation: Orientation) -> bool {
 /// Decodes an image and returns its bounded copy (see the module docs).
 ///
 /// The header is read first: more than `limits.max_pixels` pixels, or a decode that would
-/// need more than `limits.max_alloc` bytes, is [`RenderError::TooLarge`] before any pixel
-/// is decoded. Decoders also enforce `max_alloc` themselves; a breach there is
-/// `TooLarge` too, never a panic or an abort. Downscaling uses `image`'s area-averaging
-/// `thumbnail`, which needs no intermediate buffer.
+/// exceed the estimated `limits.max_alloc` working set, is [`RenderError::TooLarge`]
+/// before pixel decoding. Other formats also receive `image::Limits::max_alloc`.
+/// This is a decode buffer budget, not a hard RSS limit. JPEG uses reduced IDCT, then
+/// `image`'s area-averaging `thumbnail`; other formats decode before downscaling.
 pub fn ingest<'a>(
     source: impl Into<PhotoSource<'a>>,
     limits: &IngestLimits,
@@ -151,12 +154,35 @@ fn ingest_reader<R: BufRead + Seek>(
     reader: ImageReader<R>,
     limits: &IngestLimits,
 ) -> Result<RgbImage, RenderError> {
-    let mut reader = reader.with_guessed_format()?;
+    let reader = reader.with_guessed_format()?;
     if reader.format().is_none() {
         return Err(RenderError::UnsupportedFormat(
             "not a JPEG, PNG, TIFF, BMP or WebP image".to_owned(),
         ));
     }
+    let format = reader.format().expect("format checked");
+    let mut input = reader.into_inner();
+    let start = input.stream_position()?;
+    if format == ImageFormat::Png {
+        // image::PngDecoder also scans up to IDAT at construction. Read only IHDR
+        // first, so a header-only oversized upload is rejected as TooLarge.
+        let mut png = png::Decoder::new_with_limits(
+            &mut input,
+            png::Limits {
+                bytes: limits.max_alloc.min(usize::MAX as u64) as usize,
+            },
+        );
+        let header = png.read_header_info().map_err(|e| match e {
+            png::DecodingError::LimitsExceeded => RenderError::TooLarge(e.to_string()),
+            _ => RenderError::Decode(e.to_string()),
+        })?;
+        check_pixels(header.width, header.height, limits)?;
+        input.seek(SeekFrom::Start(start))?;
+    }
+    if format == ImageFormat::Jpeg {
+        return ingest_jpeg(input, limits);
+    }
+    let mut reader = ImageReader::with_format(input, format);
     let mut image_limits = Limits::default();
     image_limits.max_alloc = Some(limits.max_alloc);
     reader.limits(image_limits);
@@ -164,13 +190,7 @@ fn ingest_reader<R: BufRead + Seek>(
 
     let (w, h) = decoder.dimensions();
     let pixels = u64::from(w) * u64::from(h);
-    if pixels > limits.max_pixels {
-        return Err(RenderError::TooLarge(format!(
-            "{w}x{h} is {:.1} MP; the limit is {:.0} MP",
-            pixels as f64 / 1e6,
-            limits.max_pixels as f64 / 1e6
-        )));
-    }
+    check_pixels(w, h, limits)?;
     let orientation = decoder.orientation().unwrap_or(Orientation::NoTransforms);
     let (bw, bh) = if swaps_axes(orientation) {
         let (bh, bw) = bounded_size(h, w);
@@ -180,7 +200,7 @@ fn ingest_reader<R: BufRead + Seek>(
     };
     // The decoded image plus the bounded copy at the decoded pixel size.
     let bytes_per_pixel = decoder.total_bytes() / pixels.max(1);
-    let needed = decoder.total_bytes() + u64::from(bw) * u64::from(bh) * bytes_per_pixel;
+    let needed = decoder.total_bytes() + u64::from(bw) * u64::from(bh) * (bytes_per_pixel + 4);
     if needed > limits.max_alloc {
         return Err(RenderError::TooLarge(format!(
             "decoding {w}x{h} needs about {} MiB; the limit is {} MiB",
@@ -199,6 +219,81 @@ fn ingest_reader<R: BufRead + Seek>(
     };
     small.apply_orientation(orientation);
     Ok(flatten_on_white(small))
+}
+
+fn check_pixels(w: u32, h: u32, limits: &IngestLimits) -> Result<(), RenderError> {
+    let pixels = u64::from(w) * u64::from(h);
+    if pixels > limits.max_pixels {
+        return Err(RenderError::TooLarge(format!(
+            "{w}x{h} is {:.1} MP; the limit is {:.0} MP",
+            pixels as f64 / 1e6,
+            limits.max_pixels as f64 / 1e6
+        )));
+    }
+    Ok(())
+}
+
+fn ingest_jpeg<R: Read>(input: R, limits: &IngestLimits) -> Result<RgbImage, RenderError> {
+    let decode_error = |e: jpeg_decoder::Error| RenderError::Decode(e.to_string());
+    let mut decoder = jpeg_decoder::Decoder::new(input);
+    decoder.set_max_decoding_buffer_size(limits.max_alloc.min(usize::MAX as u64) as usize);
+    decoder.read_info().map_err(decode_error)?;
+    let info = decoder.info().expect("JPEG header read");
+    let (w, h) = (u32::from(info.width), u32::from(info.height));
+    check_pixels(w, h, limits)?;
+    let (bw, bh) = bounded_size(w, h);
+    let (sw, sh) = decoder.scale(bw as u16, bh as u16).map_err(decode_error)?;
+    let channels = info.pixel_format.pixel_bytes() as u64;
+    // Reserve decoded output, component buffers and conservative DCT coefficients
+    // (progressive JPEG keeps full-resolution coefficients even when scaled).
+    let coefficients = if info.coding_process == jpeg_decoder::CodingProcess::DctProgressive {
+        u64::from(w.div_ceil(32) * 32) * u64::from(h.div_ceil(32) * 32) * channels * 2
+    } else {
+        0
+    };
+    let needed = coefficients
+        + u64::from(w) * channels * 32 * 2
+        + u64::from(sw) * u64::from(sh) * channels * 2
+        + u64::from(bw) * u64::from(bh) * 6;
+    if needed > limits.max_alloc {
+        return Err(RenderError::TooLarge(format!(
+            "JPEG decode working set needs about {} MiB; budget is {} MiB",
+            needed.div_ceil(1024 * 1024),
+            limits.max_alloc / (1024 * 1024)
+        )));
+    }
+    let pixels = decoder.decode().map_err(decode_error)?;
+    let orientation = decoder
+        .exif_data()
+        .and_then(Orientation::from_exif_chunk)
+        .unwrap_or(Orientation::NoTransforms);
+    let (sw, sh) = (u32::from(sw), u32::from(sh));
+    let img = match info.pixel_format {
+        jpeg_decoder::PixelFormat::RGB24 => RgbImage::from_raw(sw, sh, pixels)
+            .ok_or_else(|| RenderError::Decode("unexpected JPEG buffer size".into()))?,
+        jpeg_decoder::PixelFormat::L8 => RgbImage::from_fn(sw, sh, |x, y| {
+            image::Rgb([pixels[(y * sw + x) as usize]; 3])
+        }),
+        jpeg_decoder::PixelFormat::CMYK32 => RgbImage::from_fn(sw, sh, |x, y| {
+            let i = ((y * sw + x) * 4) as usize;
+            let k = u16::from(pixels[i + 3]);
+            let channel = |c| ((u16::from(c) * k + 127) / 255) as u8;
+            image::Rgb([
+                channel(pixels[i]),
+                channel(pixels[i + 1]),
+                channel(pixels[i + 2]),
+            ])
+        }),
+        jpeg_decoder::PixelFormat::L16 => {
+            return Err(RenderError::UnsupportedFormat(
+                "16-bit lossless JPEG".into(),
+            ))
+        }
+    };
+    let mut small = DynamicImage::ImageRgb8(img).thumbnail_exact(bw, bh);
+    small.apply_orientation(orientation);
+    let (bw, bh) = bounded_size(small.width(), small.height());
+    Ok(small.thumbnail_exact(bw, bh).into_rgb8())
 }
 
 /// RGB with any alpha composited over white.
@@ -373,21 +468,39 @@ mod tests {
 
     #[test]
     fn focal_point_moves_the_crop_and_clamps_at_edges() {
-        assert_eq!(cover_crop_rect(2000, 600, Some((0.0, 0.5))), (0, 0, 1000, 600));
-        assert_eq!(cover_crop_rect(2000, 600, Some((1.0, 0.5))), (1000, 0, 1000, 600));
-        assert_eq!(cover_crop_rect(2000, 600, Some((0.4, 0.5))), (300, 0, 1000, 600));
-        assert_eq!(cover_crop_rect(600, 1000, Some((0.5, 0.0))), (0, 0, 600, 360));
-        assert_eq!(cover_crop_rect(600, 1000, Some((0.5, 2.0))), (0, 640, 600, 360));
-        assert_eq!(cover_crop_rect(600, 1000, Some((f32::NAN, 0.5))), (0, 320, 600, 360));
+        assert_eq!(
+            cover_crop_rect(2000, 600, Some((0.0, 0.5))),
+            (0, 0, 1000, 600)
+        );
+        assert_eq!(
+            cover_crop_rect(2000, 600, Some((1.0, 0.5))),
+            (1000, 0, 1000, 600)
+        );
+        assert_eq!(
+            cover_crop_rect(2000, 600, Some((0.4, 0.5))),
+            (300, 0, 1000, 600)
+        );
+        assert_eq!(
+            cover_crop_rect(600, 1000, Some((0.5, 0.0))),
+            (0, 0, 600, 360)
+        );
+        assert_eq!(
+            cover_crop_rect(600, 1000, Some((0.5, 2.0))),
+            (0, 640, 600, 360)
+        );
+        assert_eq!(
+            cover_crop_rect(600, 1000, Some((f32::NAN, 0.5))),
+            (0, 320, 600, 360)
+        );
     }
 
     #[test]
     fn enhance_stretches_a_low_contrast_image() {
         let mut gray = GrayF32::from_fn(800, 480, |x, _| Luma([0.4 + 0.2 * x as f32 / 799.0]));
         enhance(&mut gray);
-        let (min, max) = gray
-            .pixels()
-            .fold((1.0f32, 0.0f32), |(lo, hi), p| (lo.min(p.0[0]), hi.max(p.0[0])));
+        let (min, max) = gray.pixels().fold((1.0f32, 0.0f32), |(lo, hi), p| {
+            (lo.min(p.0[0]), hi.max(p.0[0]))
+        });
         assert!(min < 0.01 && max > 0.99, "{min}..{max}");
     }
 }

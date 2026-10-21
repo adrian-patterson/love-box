@@ -102,7 +102,7 @@ fn golden_quote_short_centred_with_attribution() {
 
 #[test]
 fn golden_quote_long_left_with_paragraphs() {
-    let body = format!("{}\n\n{}", lorem(1300), lorem(1300));
+    let body = format!("{}\n\n{}", lorem(950), lorem(950));
     let mut spec = QuoteSpec::new(body);
     spec.attribution = Some("Cicero, De finibus".into());
     let frame = render(&Card::Quote(spec), &Fonts::bundled()).unwrap();
@@ -118,5 +118,37 @@ fn golden_quote_in_each_bundled_font() {
         spec.font = name.to_owned();
         let frame = render(&Card::Quote(spec), &fonts).unwrap();
         check_golden(&format!("quote-font-{name}"), &frame);
+    }
+}
+
+#[test]
+fn golden_photos_both_dithers() {
+    use lovebox::render::{photo, Dither, PhotoSpec};
+    let image = image::RgbImage::from_fn(1600, 960, |x, y| {
+        let mut v = (x * 255 / 1599) as u8;
+        if y > 640 && ((x / 40) + (y / 40)) % 2 == 0 {
+            v = if x < 800 { 30 } else { 225 };
+        }
+        let (dx, dy) = (x as i32 - 1200, y as i32 - 300);
+        if dx * dx + dy * dy < 150 * 150 {
+            v /= 4;
+        }
+        image::Rgb([v, v, v])
+    });
+    for (name, dither) in [
+        ("photo-floyd-steinberg", Dither::FloydSteinberg),
+        ("photo-atkinson", Dither::Atkinson),
+    ] {
+        check_golden(
+            name,
+            &photo::frame(
+                &image,
+                &PhotoSpec {
+                    dither,
+                    focal: None,
+                    enhance: true,
+                },
+            ),
+        );
     }
 }

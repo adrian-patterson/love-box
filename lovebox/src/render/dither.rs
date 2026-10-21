@@ -20,7 +20,10 @@ pub enum Dither {
 
 /// Dithers `gray` (placed at the top-left; any uncovered area is white) to a frame.
 pub fn dither(gray: &GrayF32, method: Dither) -> Frame {
-    let (w, h) = (gray.width().min(WIDTH) as usize, gray.height().min(HEIGHT) as usize);
+    let (w, h) = (
+        gray.width().min(WIDTH) as usize,
+        gray.height().min(HEIGHT) as usize,
+    );
     let mut buf = vec![1.0f32; w * h];
     for y in 0..h {
         for x in 0..w {
@@ -121,8 +124,14 @@ mod tests {
         let at = |v: f32| dither(&flat(v), Dither::Atkinson).white_fraction();
         assert!((at(0.5) - 0.5).abs() < 0.02, "Atkinson 0.5: {}", at(0.5));
         let (dark, light) = (at(0.25), at(0.75));
-        assert!(dark < 0.25 && light > 0.75, "Atkinson 0.25: {dark}, 0.75: {light}");
-        assert!((dark + light - 1.0).abs() < 0.02, "asymmetric: {dark} + {light}");
+        assert!(
+            dark < 0.25 && light > 0.75,
+            "Atkinson 0.25: {dark}, 0.75: {light}"
+        );
+        assert!(
+            (dark + light - 1.0).abs() < 0.02,
+            "asymmetric: {dark} + {light}"
+        );
         assert!(dither(&flat(0.1), Dither::Atkinson).white_fraction() < 0.02);
         assert!(dither(&flat(0.9), Dither::Atkinson).white_fraction() > 0.98);
     }

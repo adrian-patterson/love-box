@@ -53,3 +53,12 @@ lint:
 
 run:
 	cd $(CRATE) && cargo run -- serve
+
+.PHONY: render-samples
+render-samples:
+	mkdir -p out
+	cd $(CRATE) && cargo run --example photo-fixture -- ../out/sample-source.png
+	cd $(CRATE) && cargo run -- render message --size 48 'Good morning, love. See you tonight.' -o ../out/message.png
+	cd $(CRATE) && cargo run -- render quote 'Hold fast to dreams, and make room for the little joys.' --author 'A reader' --align center -o ../out/quote.png
+	cd $(CRATE) && cargo run -- render photo ../out/sample-source.png -o ../out/photo.png --keep-copy ../out/bounded.jpg
+	cd $(CRATE) && cargo run -- render clear -o ../out/clear.png

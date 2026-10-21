@@ -16,6 +16,8 @@ ab_glyph = "0.2.32"
 clap = { version = "4.6.7", features = ["derive"] }
 image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "tiff", "bmp", "webp"] }
 png = "0.18.1"
+# Reduced IDCT decoding, no rayon: one worker on the Pi Zero W.
+jpeg-decoder = { version = "0.3.2", default-features = false }
 tokio = { version = "1.54.0", default-features = false, features = ["rt", "macros", "signal", "time"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", default-features = false, features = ["fmt", "std", "env-filter", "ansi"] }

@@ -4,10 +4,16 @@
 //! SIGTERM or SIGINT, and exits 0. Later milestones add the web server (docs/PLAN.md).
 
 use std::io::{self, IsTerminal};
+use std::path::PathBuf;
 use std::process::ExitCode;
+use std::sync::Arc;
 use std::time::Duration;
 
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, Parser, Subcommand, ValueEnum};
+use lovebox::fonts::{Fonts, DEFAULT_FONT};
+use lovebox::render::{
+    self, photo, Align, Card, Dither, IngestLimits, MessageSize, PhotoSpec, QuoteSpec, RenderError,
+};
 use tokio::signal::unix::{signal, SignalKind};
 use tokio::time::{interval_at, Instant, MissedTickBehavior};
 use tracing::{error, info};
@@ -29,10 +35,166 @@ struct Cli {
     command: Option<Command>,
 }
 
-#[derive(Subcommand, Debug, PartialEq, Eq)]
+#[derive(Subcommand, Debug, PartialEq)]
 enum Command {
     /// Run the service (the default when no subcommand is given).
     Serve(ServeArgs),
+    /// Render a card to an 800x480 1-bit PNG.
+    Render(RenderArgs),
+    /// List bundled font ids and display names.
+    Fonts,
+}
+
+#[derive(Args, Debug, PartialEq)]
+struct RenderArgs {
+    /// PNG destination.
+    #[arg(short, long, global = true, default_value = "out/frame.png")]
+    output: PathBuf,
+    #[command(subcommand)]
+    card: RenderCard,
+}
+
+#[derive(Subcommand, Debug, PartialEq)]
+enum RenderCard {
+    /// Message in one of the four legacy sizes.
+    Message {
+        text: String,
+        #[arg(long, default_value = "48", value_parser = parse_size)]
+        size: MessageSize,
+        #[arg(long, default_value = DEFAULT_FONT)]
+        font: String,
+    },
+    /// Auto-fitted quote, up to 2,000 normalised characters (14 px floor, 40 px margins).
+    Quote {
+        #[arg(required_unless_present = "file", conflicts_with = "file")]
+        text: Option<String>,
+        #[arg(long)]
+        file: Option<PathBuf>,
+        #[arg(long, default_value = DEFAULT_FONT)]
+        font: String,
+        #[arg(long)]
+        author: Option<String>,
+        #[arg(long, value_enum, default_value = "left")]
+        align: CliAlign,
+    },
+    /// Decode, cover-crop and dither a photo.
+    Photo {
+        input: PathBuf,
+        #[arg(long, value_enum, default_value = "floyd-steinberg")]
+        dither: CliDither,
+        #[arg(long, value_parser = parse_focal)]
+        focal: Option<(f32, f32)>,
+        #[arg(long)]
+        no_enhance: bool,
+        /// Save the bounded library copy as JPEG.
+        #[arg(long)]
+        keep_copy: Option<PathBuf>,
+        /// Decode allocation budget in MiB (codec scratch space is additional).
+        #[arg(long, default_value_t = 512, value_parser = clap::value_parser!(u64).range(1..=4096))]
+        max_alloc_mib: u64,
+    },
+    /// Blank, all-white frame.
+    Clear,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+enum CliAlign {
+    Left,
+    Center,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+enum CliDither {
+    FloydSteinberg,
+    Atkinson,
+}
+
+fn parse_size(value: &str) -> Result<MessageSize, String> {
+    value
+        .parse::<u32>()
+        .ok()
+        .and_then(MessageSize::from_pt)
+        .ok_or_else(|| "size must be 30, 48, 64 or 96".to_owned())
+}
+
+fn parse_focal(value: &str) -> Result<(f32, f32), String> {
+    let invalid = || "focal must be two finite fractions in 0..=1, e.g. 0.5,0.3".to_owned();
+    let (x, y) = value.split_once(',').ok_or_else(invalid)?;
+    let x: f32 = x.parse().map_err(|_| invalid())?;
+    let y: f32 = y.parse().map_err(|_| invalid())?;
+    if !(0.0..=1.0).contains(&x) || !(0.0..=1.0).contains(&y) {
+        return Err(invalid());
+    }
+    Ok((x, y))
+}
+
+fn write_output(path: &std::path::Path, bytes: &[u8]) -> Result<(), RenderError> {
+    if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(path, bytes)?;
+    Ok(())
+}
+
+fn render_command(args: RenderArgs) -> Result<(), RenderError> {
+    let card = match args.card {
+        RenderCard::Message { text, size, font } => {
+            let mut card = Card::message(text, size);
+            if let Card::Message { font: name, .. } = &mut card {
+                *name = font;
+            }
+            card
+        }
+        RenderCard::Quote {
+            text,
+            file,
+            font,
+            author,
+            align,
+        } => {
+            let text = match file {
+                Some(path) => std::fs::read_to_string(path)?,
+                None => text.unwrap_or_default(),
+            };
+            let mut quote = QuoteSpec::new(text);
+            quote.font = font;
+            quote.attribution = author;
+            quote.align = match align {
+                CliAlign::Left => Align::Left,
+                CliAlign::Center => Align::Center,
+            };
+            Card::Quote(quote)
+        }
+        RenderCard::Photo {
+            input,
+            dither,
+            focal,
+            no_enhance,
+            keep_copy,
+            max_alloc_mib,
+        } => {
+            let limits = IngestLimits::native().with_max_alloc(max_alloc_mib * 1024 * 1024);
+            let image = photo::ingest(input.as_path(), &limits)?;
+            if let Some(path) = keep_copy {
+                write_output(&path, &photo::encode_jpeg(&image, 90)?)?;
+            }
+            let spec = PhotoSpec {
+                dither: match dither {
+                    CliDither::FloydSteinberg => Dither::FloydSteinberg,
+                    CliDither::Atkinson => Dither::Atkinson,
+                },
+                focal,
+                enhance: !no_enhance,
+            };
+            Card::Photo {
+                image: Arc::new(image),
+                spec,
+            }
+        }
+        RenderCard::Clear => Card::Clear,
+    };
+    let frame = render::render(&card, &Fonts::bundled())?;
+    write_output(&args.output, &frame.to_png())
 }
 
 #[derive(Args, Debug, PartialEq, Eq)]
@@ -55,7 +217,14 @@ fn main() -> ExitCode {
     let cli = Cli::parse();
     init_logging();
     let result = match cli.command.unwrap_or(Command::Serve(ServeArgs::default())) {
-        Command::Serve(args) => serve(&args),
+        Command::Serve(args) => serve(&args).map_err(RenderError::from),
+        Command::Render(args) => render_command(args),
+        Command::Fonts => {
+            for face in Fonts::bundled().faces() {
+                println!("{}\t{}", face.id(), face.display_name());
+            }
+            Ok(())
+        }
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,

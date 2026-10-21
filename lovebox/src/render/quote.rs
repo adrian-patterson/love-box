@@ -14,7 +14,7 @@ pub const QUOTE_MAX_PX: u32 = 120;
 /// Line height as a multiple of the font size.
 pub const QUOTE_LINE_HEIGHT: f32 = 1.25;
 /// Default maximum body length in characters (after whitespace normalisation).
-pub const QUOTE_MAX_CHARS: usize = 3000;
+pub const QUOTE_MAX_CHARS: usize = 2000;
 
 /// Horizontal alignment of the quote body. The attribution is always right-aligned.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -38,7 +38,7 @@ pub struct QuoteSpec {
     pub font: String,
     /// Body alignment.
     pub align: Align,
-    /// Longest accepted body, in characters; longer input is [`RenderError::TooLong`].
+    /// Optional stricter body limit, in characters; never exceeds [`QUOTE_MAX_CHARS`].
     pub max_chars: usize,
 }
 
@@ -195,14 +195,14 @@ fn attribution_line(attribution: &str) -> Option<String> {
 ///
 /// Errors: [`RenderError::TooLong`] when the normalised body is over `spec.max_chars`
 /// (checked before any layout) or does not fit even at 14 px (for example one
-/// unbreakable 3,000-character word); [`RenderError::InvalidInput`] for an empty body.
+/// unbreakable 2,000-character word); [`RenderError::InvalidInput`] for an empty body.
 pub fn fit_quote(spec: &QuoteSpec, face: &Face) -> Result<QuoteLayout, RenderError> {
     let text = normalise_whitespace(&spec.text);
     let chars = text.chars().count();
-    if chars > spec.max_chars {
+    if chars > spec.max_chars.min(QUOTE_MAX_CHARS) {
         return Err(RenderError::TooLong {
             chars,
-            max: spec.max_chars,
+            max: spec.max_chars.min(QUOTE_MAX_CHARS),
         });
     }
     if text.is_empty() {
@@ -215,7 +215,7 @@ pub fn fit_quote(spec: &QuoteSpec, face: &Face) -> Result<QuoteLayout, RenderErr
     let Some(mut best) = layout_at(face, QUOTE_MIN_PX, &paragraphs, attribution) else {
         return Err(RenderError::TooLong {
             chars,
-            max: spec.max_chars,
+            max: spec.max_chars.min(QUOTE_MAX_CHARS),
         });
     };
     let (mut lo, mut hi) = (QUOTE_MIN_PX, QUOTE_MAX_PX);
@@ -351,39 +351,63 @@ mod tests {
         assert!(layout.size_px() >= 60, "size {}", layout.size_px());
     }
 
-    /// With 40 px margins and 1.25x leading, 14 px EB Garamond holds 22 lines of about
-    /// 132 characters: ~2,900 characters of lorem ipsum (`measure_capacity_at_the_floor`).
     #[test]
-    fn about_three_thousand_chars_fit_at_the_floor_in_the_default_font() {
+    fn two_thousand_characters_fit_in_every_bundled_face() {
         let fonts = Fonts::bundled();
-        let text = lorem(2900);
-        assert!(text.chars().count() > 2890);
-        let layout = fit_quote(&QuoteSpec::new(text), fonts.default_face()).unwrap();
-        assert_eq!(layout.size_px(), QUOTE_MIN_PX);
-        assert_eq!(layout.body_lines(), 22);
+        let mut text = lorem(2000);
+        while text.len() + 2 <= 2000 {
+            text.push_str(" a");
+        }
+        if text.len() < 2000 {
+            text.push('a');
+        }
+        assert_eq!(text.chars().count(), 2000);
+        for face in fonts.faces() {
+            let mut spec = QuoteSpec::new(text.clone());
+            spec.attribution = Some("A reader".into());
+            let layout = fit_quote(&spec, face).unwrap();
+            assert!(layout.size_px() >= QUOTE_MIN_PX, "{}", face.id());
+        }
     }
 
     #[test]
     fn over_max_chars_is_too_long_before_layout() {
         let fonts = Fonts::bundled();
-        let text = "a".repeat(3001);
+        let text = "a".repeat(2001);
         match fit_quote(&QuoteSpec::new(text), fonts.default_face()) {
             Err(RenderError::TooLong {
-                chars: 3001,
-                max: 3000,
+                chars: 2001,
+                max: 2000,
             }) => {}
             other => panic!("{other:?}"),
         }
     }
 
     #[test]
+    fn caller_can_lower_but_never_raise_the_character_cap() {
+        let fonts = Fonts::bundled();
+        let mut spec = QuoteSpec::new("a".repeat(2001));
+        spec.max_chars = usize::MAX;
+        assert!(matches!(
+            fit_quote(&spec, fonts.default_face()),
+            Err(RenderError::TooLong { max: 2000, .. })
+        ));
+        spec.text = "One short quote".into();
+        spec.max_chars = 5;
+        assert!(matches!(
+            fit_quote(&spec, fonts.default_face()),
+            Err(RenderError::TooLong { max: 5, .. })
+        ));
+    }
+
+    #[test]
     fn one_unbreakable_word_is_too_long_not_a_panic() {
         let fonts = Fonts::bundled();
-        let text = "x".repeat(3000);
+        let text = "x".repeat(2000);
         match fit_quote(&QuoteSpec::new(text), fonts.default_face()) {
             Err(RenderError::TooLong {
-                chars: 3000,
-                max: 3000,
+                chars: 2000,
+                max: 2000,
             }) => {}
             other => panic!("{other:?}"),
         }
@@ -439,7 +463,7 @@ mod tests {
     fn every_bundled_font_fits_a_short_and_a_long_quote() {
         let fonts = Fonts::bundled();
         // Libre Baskerville, the widest face, holds ~2,150 characters at 14 px.
-        let long = lorem(2100);
+        let long = lorem(2000);
         for face in fonts.faces() {
             let short = fit_quote(&QuoteSpec::new("Hold fast to dreams."), face).unwrap();
             assert!(short.size_px() >= 60, "{}: {}", face.id(), short.size_px());

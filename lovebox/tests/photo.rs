@@ -15,7 +15,7 @@ fn scene(w: u32, h: u32) -> RgbImage {
     RgbImage::from_fn(w, h, |x, y| {
         let fx = x * 255 / w;
         let fy = y * 255 / h;
-        let ring = (((x / 97) + (y / 89)) % 2) as u32 * 40;
+        let ring = (((x / 97) + (y / 89)) % 2) * 40;
         Rgb([fx as u8, fy as u8, ((fx + fy) / 2 + ring).min(255) as u8])
     })
 }
@@ -103,7 +103,12 @@ fn over_80_megapixels_is_too_large_before_decoding() {
 fn a_one_megabyte_limit_is_too_large_not_a_panic() {
     let img = DynamicImage::ImageRgb8(scene(1000, 1000));
     let limits = IngestLimits::native().with_max_alloc(1024 * 1024);
-    for format in [ImageFormat::Png, ImageFormat::Jpeg, ImageFormat::Tiff, ImageFormat::Bmp] {
+    for format in [
+        ImageFormat::Png,
+        ImageFormat::Jpeg,
+        ImageFormat::Tiff,
+        ImageFormat::Bmp,
+    ] {
         let bytes = encode(&img, format);
         match ingest(bytes.as_slice(), &limits) {
             Err(RenderError::TooLarge(_)) => {}
@@ -142,8 +147,15 @@ fn webp_and_bmp_decode_losslessly() {
 fn ingest_reads_files_and_rejects_garbage() {
     let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"));
     let path = dir.join("ingest-file.png");
-    std::fs::write(&path, encode(&DynamicImage::ImageRgb8(scene(64, 48)), ImageFormat::Png)).unwrap();
-    assert_eq!(ingest(path.as_path(), &IngestLimits::default()).unwrap(), scene(64, 48));
+    std::fs::write(
+        &path,
+        encode(&DynamicImage::ImageRgb8(scene(64, 48)), ImageFormat::Png),
+    )
+    .unwrap();
+    assert_eq!(
+        ingest(path.as_path(), &IngestLimits::default()).unwrap(),
+        scene(64, 48)
+    );
     assert!(matches!(
         ingest(dir.join("missing.png").as_path(), &IngestLimits::default()),
         Err(RenderError::Io(_))
@@ -168,14 +180,22 @@ fn bounded_copy_round_trips_through_jpeg() {
 }
 
 fn spec(dither: Dither, focal: Option<(f32, f32)>, enhance: bool) -> PhotoSpec {
-    PhotoSpec { dither, focal, enhance }
+    PhotoSpec {
+        dither,
+        focal,
+        enhance,
+    }
 }
 
 #[test]
 fn portrait_crops_top_and_bottom_landscape_crops_sides() {
     // Portrait 600x1000: black top and bottom, white 5:3 band in the middle.
     let portrait = RgbImage::from_fn(600, 1000, |_, y| {
-        if (320..680).contains(&y) { Rgb([255; 3]) } else { Rgb([0; 3]) }
+        if (320..680).contains(&y) {
+            Rgb([255; 3])
+        } else {
+            Rgb([0; 3])
+        }
     });
     assert_eq!(cover_crop_rect(600, 1000, None), (0, 320, 600, 360));
     let f = photo::frame(&portrait, &spec(Dither::FloydSteinberg, None, false));
@@ -183,7 +203,11 @@ fn portrait_crops_top_and_bottom_landscape_crops_sides() {
 
     // Landscape 2000x600: black sides, white 5:3 middle.
     let landscape = RgbImage::from_fn(2000, 600, |x, _| {
-        if (500..1500).contains(&x) { Rgb([255; 3]) } else { Rgb([0; 3]) }
+        if (500..1500).contains(&x) {
+            Rgb([255; 3])
+        } else {
+            Rgb([0; 3])
+        }
     });
     let f = photo::frame(&landscape, &spec(Dither::FloydSteinberg, None, false));
     assert!(f.white_fraction() > 0.99, "{}", f.white_fraction());
@@ -192,25 +216,43 @@ fn portrait_crops_top_and_bottom_landscape_crops_sides() {
 #[test]
 fn focal_point_shifts_the_crop() {
     // Left half black, right half white, 2000x600: the crop is 1000 wide.
-    let img = RgbImage::from_fn(2000, 600, |x, _| if x < 1000 { Rgb([0; 3]) } else { Rgb([255; 3]) });
+    let img = RgbImage::from_fn(2000, 600, |x, _| {
+        if x < 1000 {
+            Rgb([0; 3])
+        } else {
+            Rgb([255; 3])
+        }
+    });
     let left = photo::frame(&img, &spec(Dither::FloydSteinberg, Some((0.0, 0.5)), false));
     let right = photo::frame(&img, &spec(Dither::FloydSteinberg, Some((1.0, 0.5)), false));
     let centre = photo::frame(&img, &spec(Dither::FloydSteinberg, None, false));
     assert!(left.white_fraction() < 0.01, "{}", left.white_fraction());
     assert!(right.white_fraction() > 0.99, "{}", right.white_fraction());
-    assert!((centre.white_fraction() - 0.5).abs() < 0.02, "{}", centre.white_fraction());
+    assert!(
+        (centre.white_fraction() - 0.5).abs() < 0.02,
+        "{}",
+        centre.white_fraction()
+    );
 }
 
 /// Gradient across, a checkerboard in the lower third, a dark disc: the golden source.
 fn gradient_checker() -> RgbImage {
     RgbImage::from_fn(1600, 960, |x, y| {
         let v = if y > 640 && ((x / 40) + (y / 40)) % 2 == 0 {
-            if x < 800 { 30 } else { 225 }
+            if x < 800 {
+                30
+            } else {
+                225
+            }
         } else {
             (x * 255 / 1599) as u8
         };
         let (dx, dy) = (x as i32 - 1200, y as i32 - 300);
-        let v = if dx * dx + dy * dy < 150 * 150 { v / 4 } else { v };
+        let v = if dx * dx + dy * dy < 150 * 150 {
+            v / 4
+        } else {
+            v
+        };
         Rgb([v, v, v])
     })
 }
@@ -223,7 +265,10 @@ fn both_dithers_keep_the_mean_within_5_percent() {
         let gray = prepare_gray(&img, &s);
         let mean = gray.pixels().map(|p| f64::from(p.0[0])).sum::<f64>() / (800.0 * 480.0);
         let white = photo::frame(&img, &s).white_fraction();
-        assert!((white - mean).abs() < 0.05, "{method:?}: source {mean:.3}, frame {white:.3}");
+        assert!(
+            (white - mean).abs() < 0.05,
+            "{method:?}: source {mean:.3}, frame {white:.3}"
+        );
     }
 }
 
@@ -235,5 +280,72 @@ fn photo_card_renders_through_render() {
     };
     let frame = render(&card, &Fonts::bundled()).unwrap();
     assert_ne!(frame, Frame::white());
-    assert_eq!(frame, photo::frame(&gradient_checker(), &PhotoSpec::default()));
+    assert_eq!(
+        frame,
+        photo::frame(&gradient_checker(), &PhotoSpec::default())
+    );
+}
+
+#[test]
+fn jpeg_40_megapixels_ingests_under_pi_limit() {
+    let jpeg = encode(
+        &DynamicImage::ImageRgb8(scene(8000, 5000)),
+        ImageFormat::Jpeg,
+    );
+    let started = Instant::now();
+    let copy = ingest(jpeg.as_slice(), &IngestLimits::pi()).unwrap();
+    eprintln!("40 MP JPEG ingest (test profile): {:?}", started.elapsed());
+    assert_eq!(copy.dimensions(), (1536, 960));
+}
+
+#[test]
+fn jpeg_orientation_is_applied_and_copy_stays_bounded() {
+    let mut jpeg = encode(
+        &DynamicImage::ImageRgb8(scene(2400, 1200)),
+        ImageFormat::Jpeg,
+    );
+    // APP1 Exif: little-endian TIFF, one orientation entry (6 = rotate clockwise).
+    let exif = b"Exif\0\0II*\0\x08\0\0\0\x01\0\x12\x01\x03\0\x01\0\0\0\x06\0\0\0\0\0\0\0";
+    let mut app = vec![0xff, 0xe1];
+    app.extend_from_slice(&((exif.len() + 2) as u16).to_be_bytes());
+    app.extend_from_slice(exif);
+    jpeg.splice(2..2, app);
+    let copy = ingest(jpeg.as_slice(), &IngestLimits::pi()).unwrap();
+    assert_eq!(copy.dimensions(), (480, 960));
+    // Originally dark top-left becomes top-right after rotation.
+    assert!(copy.get_pixel(470, 5).0[0] < 20);
+}
+
+#[test]
+fn oversized_jpeg_header_is_rejected_without_scan_data() {
+    let header = [
+        0xff, 0xd8, 0xff, 0xc0, 0, 17, 8, 0x23, 0x28, 0x23, 0x28, 3, 1, 0x11, 0, 2, 0x11, 0, 3,
+        0x11, 0,
+    ];
+    assert!(matches!(
+        ingest(header.as_slice(), &IngestLimits::pi()),
+        Err(RenderError::TooLarge(_))
+    ));
+}
+
+#[test]
+fn truncated_jpeg_end_is_a_client_error() {
+    let jpeg = encode(&DynamicImage::ImageRgb8(scene(640, 480)), ImageFormat::Jpeg);
+    for missing in [1, 2, 20, jpeg.len() / 2] {
+        let err = ingest(&jpeg[..jpeg.len() - missing], &IngestLimits::pi()).unwrap_err();
+        assert!(err.is_client_error(), "missing {missing}: {err}");
+    }
+}
+
+#[test]
+fn progressive_jpeg_reserves_full_resolution_coefficients_before_decoding() {
+    // No scan payload: estimated progressive coefficients alone exceed the Pi budget.
+    let header = [
+        0xff, 0xd8, 0xff, 0xc2, 0, 17, 8, 0x13, 0x88, 0x1f, 0x40, 3, 1, 0x11, 0, 2, 0x11, 0, 3,
+        0x11, 0,
+    ];
+    assert!(matches!(
+        ingest(header.as_slice(), &IngestLimits::pi()),
+        Err(RenderError::TooLarge(_))
+    ));
 }
