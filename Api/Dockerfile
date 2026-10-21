@@ -3,8 +3,6 @@ RUN apt update -y && apt upgrade -y
 
 FROM python:latest
 
-LABEL Maintainer="canadrian72"
-
 WORKDIR /app
 
 RUN pip3 install flask requests flask-cors python-dateutil firebase-admin

@@ -22,13 +22,13 @@ sudo "/Applications/Raspberry Pi Imager.app/Contents/MacOS/rpi-imager" --cli \
 ```
 
 `user-data` (`#cloud-config`): `hostname: lovebox`, `manage_etc_hosts: true`,
-`timezone: Europe/Paris`, `enable_ssh: true`, `ssh_pwauth: false`, user `pi` in the
+`timezone: <your tz, e.g. Europe/London>`, `enable_ssh: true`, `ssh_pwauth: false`, user `pi` in the
 standard Pi groups (including `gpio`, `spi`) with `ssh_authorized_keys` =
 `~/.ssh/id_ed25519.pub`, a hashed console password, `sudo: ALL=(ALL) NOPASSWD:ALL`, and
 `rpi: { spi: true }` so SPI is enabled at first boot (no `raspi-config` step needed).
 `network-config`: netplan v2, `renderer: NetworkManager`, `wlan0` with `dhcp4`,
-`optional: true`, `regulatory-domain: "FR"`, and the home SSID/password under
-`access-points`. The Zero W is 2.4 GHz only.
+`optional: true`, `regulatory-domain: "<your ISO 3166 country code>"`, and your Wi-Fi
+SSID/password under `access-points`. The Zero W is 2.4 GHz only.
 
 Both files hold secrets (Wi-Fi password, password hash) and live in the session scratchpad,
 never in the repo. The device node comes from `diskutil list external physical` and is

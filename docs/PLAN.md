@@ -1,6 +1,6 @@
 # love-box revamp plan
 
-Status: **accepted by Adrian 2026-10-21** (board + three defaults). Once accepted, this file is the
+Status: **accepted by the maintainer 2026-10-21** (board + three defaults). Once accepted, this file is the
 specification of record; milestones get ticked here and decisions get recorded in
 `docs/decisions/`.
 
@@ -82,12 +82,12 @@ legacy/           Api/, LoveBoxUi/, RpiUpdateService/ moved here at M3, deleted 
 
 ## Milestones
 
-Each milestone ends with an acceptance check Adrian can do from a phone or a terminal.
+Each milestone ends with an acceptance check the maintainer can do from a phone or a terminal.
 One writer at a time; a reader only for named questions. Board at
 `.tmp/agents-messaging-board/`.
 
 ### M0 — Context and plan accepted  ✅ 2026-10-21
-Deliverables: AGENTS.md, docs/, board, decisions D-001..D-003. Accepted by Adrian in chat.
+Deliverables: AGENTS.md, docs/, board, decisions D-001..D-003. Accepted by the maintainer.
 
 ### M1 — Pi reachable, provisioned, and deployable  *(active)*
 Units: U-101 Mac toolchain + `lovebox` crate skeleton + cross-build + deploy scripts —
@@ -147,7 +147,7 @@ behind a config flag and a key in `/etc/lovebox/secrets.env`, and the frame work
    optionally the weather. Rendered in the quote style. Cost: fractions of a cent per day.
 2. **Photo captions.** On upload, Claude (vision) writes a one-line caption; EXIF gives the
    date and place. Rendered as a small footer on the photo, and stored for #3.
-3. **Ask the frame.** Type "something from the chalet trip" or "a cosy one" in the UI;
+3. **Ask the frame.** Type "something from the beach trip" or "a cosy one" in the UI;
    Claude picks from the library using the stored captions. Semantic search over your own
    photos, no cloud photo service needed.
 4. **On this day.** Scheduler prefers photos taken on today's date in earlier years (EXIF).
