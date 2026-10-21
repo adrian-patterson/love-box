@@ -1,0 +1,16 @@
+# Target-specific settings only; nothing here applies to native (macOS) builds.
+#
+# Pi Zero W v1 = ARM1176JZF-S (ARMv6KZ + VFPv2, no NEON). The rustc target already means
+# ARMv6 (+v6,+vfp2,-d32), and cargo-zigbuild 0.24 already hands `zig cc`
+# -mcpu=generic+v6+strict_align+vfp2-d32 for this target (src/zig/wrapper.rs). Naming the
+# exact CPU here pins that independently of cargo-zigbuild's defaults: cargo-zigbuild maps
+# -C target-cpu to zig's -mcpu, so C code a future dependency builds through the `cc` crate
+# is compiled for the same CPU. `make check-pi` proves the result with `readelf -A`
+# (Tag_CPU_arch must be v6*).
+#
+# No `linker =` here: the cross build always goes through `cargo zigbuild` (repo Makefile,
+# target build-pi), which supplies `zig cc` as the linker. Plain
+# `cargo build --target arm-unknown-linux-gnueabihf` on macOS has no ARM Linux linker and
+# fails at link time; use `make build-pi`.
+[target.arm-unknown-linux-gnueabihf]
+rustflags = ["-C", "target-cpu=arm1176jzf-s"]

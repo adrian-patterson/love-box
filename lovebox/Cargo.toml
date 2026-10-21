@@ -1,0 +1,21 @@
+[package]
+name = "lovebox"
+version = "0.1.0"
+edition = "2021"
+description = "love-box: the e-paper picture frame service that runs on the Raspberry Pi Zero W"
+publish = false
+build = "build.rs"
+
+# U-101 rule: no C dependencies yet (no openssl, ring, sqlite). Check with
+# `cargo tree --target arm-unknown-linux-gnueabihf -e build | grep -w cc` (expect nothing).
+[dependencies]
+clap = { version = "4.6.7", features = ["derive"] }
+tokio = { version = "1.54.0", default-features = false, features = ["rt", "macros", "signal", "time"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", default-features = false, features = ["fmt", "std", "env-filter", "ansi"] }
+
+[profile.release]
+# The Pi Zero W has 512 MB RAM and a slow SD card: keep the binary small.
+lto = true
+codegen-units = 1
+strip = true
