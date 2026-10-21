@@ -65,7 +65,7 @@ CS 8 (SPI0 CE0), BUSY 24; SPI0 at 4 MHz. SPI is enabled at first boot by the set
 | Web | `axum` + `tokio`, JSON API, embedded static UI (Vite + React + TypeScript) |
 | Panel | `epd-waveshare` (`epd7in5_v2`) over `rppal` SPI/GPIO, behind a `Panel` trait with a PNG implementation for development |
 | Rendering | `image` crate, Floyd–Steinberg dithering to 1-bit, text layout with an open-licence serif |
-| State | SQLite plus a photo directory under `/var/lib/lovebox` |
+| State | One JSON state document plus a photo directory under `/var/lib/lovebox`; no database |
 | Network | mDNS (`lovebox.local`) via avahi; LAN only |
 | Build | Cross-compiled on a laptop with `cargo-zigbuild` to `arm-unknown-linux-gnueabihf`; `make build-pi` |
 

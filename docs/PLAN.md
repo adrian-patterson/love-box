@@ -50,7 +50,7 @@ specification of record; milestones get ticked here and decisions get recorded i
 phone / laptop ──http://lovebox.local──▶ lovebox (Rust, on the Pi)
                                            ├─ web UI (embedded static files, Vite+React+TS)
                                            ├─ JSON API (axum)
-                                           ├─ state: SQLite + /var/lib/lovebox/photos/
+                                           ├─ state: /var/lib/lovebox/state.json + photos/ (ADR-002)
                                            ├─ scheduler (tokio): rotation, quiet hours, daily jobs
                                            ├─ renderer: text / photo / quote → 800x480 1-bit frame
                                            │     (same code renders the UI preview as PNG)
@@ -136,8 +136,10 @@ hello-world — blocked on U-102.
   and a 48 pt message appear on the panel, no hang, panel sleeps after.
 
 ### M3 — Local web app replaces the old stack
-- axum server, SQLite store, photo library with upload (multipart; HEIC/JPEG/PNG), card
-  queue, pinned mode, `/api/preview`, `/healthz`.
+- axum server, JSON-document store (ADR-002), photo library with upload (multipart;
+  JPEG/PNG/TIFF/WebP; iOS converts HEIC on upload), a `lovebox import` laptop CLI that
+  resizes huge TIFF/JPEG files locally and POSTs them, card queue, pinned mode,
+  `/api/preview`, `/healthz`.
 - UI: message composer with live preview, photo grid with upload, "showing now" header,
   status page (uptime, last refresh, disk, temperature).
 - Acceptance: from a phone on Wi-Fi, send a message and upload a photo; the panel updates
@@ -197,7 +199,8 @@ once, breaks whenever Google changes the page. Never the default path.
   shuffle or upload order. Interval is set in the UI: default 15 min; the normal control
   ranges from 180 s (Waveshare's recommended minimum between refreshes) to 24 h; an
   "advanced" toggle unlocks 15 s–180 s with a visible warning about panel wear and the
-  4 s flash on every change. Interval, order, set, and quiet hours persist in SQLite and
+  4 s flash on every change. Interval, order, set, and quiet hours persist in the state
+  document and
   survive restarts; the scheduler catches up sensibly after a reboot (shows the next item,
   does not burst through missed ones).
 - Daily mode (new card at a set time), quiet hours (no refresh in a nightly window; the

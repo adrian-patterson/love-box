@@ -33,7 +33,8 @@ One Rust binary, `lovebox`, on the Pi:
 
 - `axum` HTTP server on the LAN (`http://lovebox.local`), serving an embedded web UI
   (Vite + React + TypeScript, built on the laptop) and a JSON API.
-- Local state only: SQLite for settings/history, a photo directory under `/var/lib/lovebox`.
+- Local state only: one JSON state document and a photo directory under `/var/lib/lovebox`
+  (docs/decisions/ADR-002).
 - Display module behind a `Panel` trait: `WavesharePanel` (hardware via `epd-waveshare`
   `epd7in5_v2` + `rppal`, Cargo feature `hardware`) and `PngPanel` (writes the frame to a
   PNG so everything develops and tests on a laptop with no hardware).
