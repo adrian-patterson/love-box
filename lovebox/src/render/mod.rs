@@ -4,9 +4,14 @@
 //! photos arrive as already-ingested pixels (see [`photo`]). The same call backs the
 //! panel and `/api/preview`, so preview equals panel.
 
+pub mod dither;
 mod message;
+pub mod photo;
 mod quote;
 mod text;
+
+pub use self::dither::Dither;
+pub use self::photo::{IngestLimits, PhotoSpec};
 
 pub use self::message::{message_lines, MessageSize, BASELINE_EM, MESSAGE_X};
 pub use self::quote::{
@@ -15,6 +20,9 @@ pub use self::quote::{
 };
 
 use std::fmt;
+use std::sync::Arc;
+
+use image::RgbImage;
 
 use crate::fonts::{Face, Fonts, DEFAULT_FONT};
 use crate::frame::Frame;
@@ -33,6 +41,13 @@ pub enum Card {
     },
     /// A quote, auto-fitted to the frame.
     Quote(QuoteSpec),
+    /// A photo: the bounded copy from [`photo::ingest`] and how to frame it.
+    Photo {
+        /// The ingested (bounded) image.
+        image: Arc<RgbImage>,
+        /// Crop, enhancement and dither settings.
+        spec: PhotoSpec,
+    },
     /// An all-white frame.
     Clear,
 }
@@ -137,6 +152,7 @@ pub fn render(card: &Card, fonts: &Fonts) -> Result<Frame, RenderError> {
             let layout = quote::fit_quote(spec, face)?;
             Ok(quote::draw_quote(&layout, face, spec.align))
         }
+        Card::Photo { image, spec } => Ok(photo::frame(image, spec)),
         Card::Clear => Ok(Frame::white()),
     }
 }
