@@ -1,8 +1,7 @@
-//! `lovebox`: the love-box e-paper frame service.
+//! `lovebox`: the love-box e-paper frame service (binary; the library is `src/lib.rs`).
 //!
-//! M1 skeleton (U-101): `lovebox serve` logs one startup line, then a heartbeat every
-//! 300 s until SIGTERM or SIGINT, and exits 0. Later milestones add the panel, renderer,
-//! and web server (docs/PLAN.md).
+//! `lovebox serve` (U-101) logs one startup line, then a heartbeat every 300 s until
+//! SIGTERM or SIGINT, and exits 0. Later milestones add the web server (docs/PLAN.md).
 
 use std::io::{self, IsTerminal};
 use std::process::ExitCode;

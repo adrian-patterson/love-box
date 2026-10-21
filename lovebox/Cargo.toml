@@ -9,10 +9,21 @@ build = "build.rs"
 # U-101 rule: no C dependencies yet (no openssl, ring, sqlite). Check with
 # `cargo tree --target arm-unknown-linux-gnueabihf -e build | grep -w cc` (expect nothing).
 [dependencies]
+# Renderer (U-201). All pure Rust. `image` without default features: no rayon (the Pi has one
+# core) and only the formats the photo pipeline accepts. `png` is the same version `image`
+# uses; it is used directly to write 1-bit PNGs.
+ab_glyph = "0.2.32"
 clap = { version = "4.6.7", features = ["derive"] }
+image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "tiff", "bmp", "webp"] }
+png = "0.18.1"
 tokio = { version = "1.54.0", default-features = false, features = ["rt", "macros", "signal", "time"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", default-features = false, features = ["fmt", "std", "env-filter", "ansi"] }
+
+# Optimise dependencies (image decoders, font rasteriser) in dev and test builds, so the
+# 24 MP decode tests run in seconds; our own crate stays at opt-level 0 for fast rebuilds.
+[profile.dev.package."*"]
+opt-level = 3
 
 [profile.release]
 # The Pi Zero W has 512 MB RAM and a slow SD card: keep the binary small.
