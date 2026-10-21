@@ -1,0 +1,5 @@
+.tmp/
+lovebox/target/
+out/
+.env.local
+*.local.toml
