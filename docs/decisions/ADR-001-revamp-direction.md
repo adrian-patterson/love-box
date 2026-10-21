@@ -24,11 +24,14 @@ features.
 
 1. docs/PLAN.md (behaviour and scope), as accepted by the maintainer.
 2. docs/RESEARCH.md (technical constraints, with sources).
-3. Existing legacy code (rendering baseline: font sizes, wrap widths, pin map).
+3. The rendering baseline recorded in AGENTS.md (font sizes, wrap widths, pin map), taken
+   from the 2022 code at tag `legacy-2022`.
 4. Upstream docs for epd-waveshare, rppal, axum.
 
 ## Consequences
 
-- Legacy code is frozen; moved to `legacy/` in M3 and deleted after M4.
+- The 2022 code was deleted from the tree on 2026-10-21 (maintainer's call, to keep the public
+  repo generic and current); tag `legacy-2022` marks the last commit containing it. Its
+  rendering baseline lives in AGENTS.md.
 - No cloud dependency may be added outside the optional sources above.
 - Secrets live only on the Pi under /etc/lovebox and in gitignored local env files.

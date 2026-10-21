@@ -20,6 +20,8 @@ specification of record; milestones get ticked here and decisions get recorded i
 
 ## Non-goals (for now)
 
+- Keeping the 2022 implementation runnable. It is gone from the tree; see tag `legacy-2022`.
+
 - Colour or partial refresh. The panel is 1-bit; the Rust driver has no partial-refresh
   support for this model. Full refresh on every change is fine for a frame.
 - Multi-frame or multi-household support. One frame, one config.
@@ -77,8 +79,11 @@ lovebox/          Rust crate (binary). src/{api,render,panel,sources,scheduler,s
 web/              Vite + React + TypeScript UI, built to lovebox/web-dist and embedded
 deploy/           lovebox.service, deploy.sh, backup.sh, cross config
 docs/             this plan, research, runbook, decisions/
-legacy/           Api/, LoveBoxUi/, RpiUpdateService/ moved here at M3, deleted after M4
 ```
+
+The 2022 Python/React/Firebase code was removed from the tree on 2026-10-21 (tag
+`legacy-2022` holds the last commit with it). Its rendering baseline is recorded in
+AGENTS.md; nothing else from it is needed.
 
 ## Milestones
 
@@ -103,8 +108,9 @@ hello-world — blocked on U-102.
 
 ### M2 — Rust drives the panel
 - `lovebox` crate skeleton with `Panel` trait, `PngPanel`, `WavesharePanel`.
-- Renderer: text with the legacy font sizes and wrap widths, photo with Floyd–Steinberg
-  dithering and cover-crop, "clear."
+- Renderer: text with the 2022 font sizes and wrap widths (AGENTS.md "Baseline"), an SIL
+  OFL serif bundled with `include_bytes!` (Palatino was not redistributable), photo with
+  Floyd–Steinberg dithering and cover-crop, "clear."
 - A CLI subcommand `lovebox show --text "hi"` / `--photo x.jpg` updates the real panel.
 - Acceptance: a photo and a 48pt message appear on the panel, no hang, panel sleeps after.
   `cargo test` passes on the Mac with golden-frame tests.
@@ -114,7 +120,6 @@ hello-world — blocked on U-102.
   queue, pinned mode, `/api/preview`, `/healthz`.
 - UI: message composer with live preview, photo grid with upload, "showing now" header,
   status page (uptime, last refresh, disk, temperature).
-- Legacy directories moved to `legacy/`; README rewritten.
 - Acceptance: from a phone on Wi-Fi, send a message and upload a photo; the panel updates
   within 10 seconds of tapping send.
 
