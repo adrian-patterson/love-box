@@ -123,18 +123,56 @@ hello-world — blocked on U-102.
 - Acceptance: from a phone on Wi-Fi, send a message and upload a photo; the panel updates
   within 10 seconds of tapping send.
 
-### M4 — Scheduling and quotes
-- Rotate mode, daily mode, quiet hours (no refresh at night), a curated quotes list editable
-  in the UI, quote render style (typographic layout, author line).
-- Acceptance: set "rotate every 2h", observe two changes; set a quote, see it rendered.
+### M4 — Slideshow, scheduling, and quotes
+- **Slideshow mode**: cycles through a set (all photos, or a tag/album the user picks) in
+  shuffle or upload order. Interval is set in the UI: default 15 min; the normal control
+  ranges from 180 s (Waveshare's recommended minimum between refreshes) to 24 h; an
+  "advanced" toggle unlocks 15 s–180 s with a visible warning about panel wear and the
+  4 s flash on every change. Interval, order, set, and quiet hours persist in SQLite and
+  survive restarts; the scheduler catches up sensibly after a reboot (shows the next item,
+  does not burst through missed ones).
+- Daily mode (new card at a set time), quiet hours (no refresh in a nightly window; the
+  panel sleeps), a curated quotes list editable in the UI, quote render style (typographic
+  layout, author line).
+- Acceptance: set "slideshow every 3 min" with 5 photos, observe 3 changes in 9 min in the
+  right order; set "every 15 s" via advanced, see the warning and the fast cycle; set a
+  quiet window covering now, observe no change; set a quote, see it rendered.
 
-### M5 — Google Photos Picker import *(spike, go/no-go)*
-- One-time OAuth on the Mac (CLI) stores a refresh token on the Pi; the UI shows
-  "Import from Google Photos" which creates a Picker session and shows the link/QR; the
-  Pi polls and downloads picked items into the library.
-- Decision point: if refresh tokens expire weekly for an unverified app, decide between
-  re-authorising occasionally, the scraper, or Immich.
-- Acceptance: pick five photos on the phone, they appear in the library within a minute.
+### M5 — Google Photos import *(spike, go/no-go)*
+
+How it works (Google's Picker API; the Library API no longer exposes a user's albums to
+third-party apps, see docs/RESEARCH.md §1):
+
+1. **One-time setup, on the laptop.** Create a Google Cloud project, enable the Photos
+   Picker API, create an OAuth client (type "Desktop"), and run `lovebox google-auth`
+   natively: it opens the Google consent page in the browser, receives the code on a
+   loopback redirect, and writes a refresh token to a file. Copy that file to
+   `/etc/lovebox/` on the Pi. The Pi cannot do this step itself: Google's device-code flow
+   does not allow the Photos scope, and Google rejects plain-http redirect URIs such as
+   `http://lovebox.local/...`. Scope: `photospicker.mediaitems.readonly` only.
+2. **Picking, from the phone.** In the lovebox UI tap "Add from Google Photos". The Pi
+   mints an access token from the refresh token, creates a Picker session, and shows the
+   session's `pickerUri` as a button and a QR code. Opening it lands in Google Photos
+   (app or web) with a picker: select photos, or open an album and select all, then Done.
+3. **Download, on the Pi.** The Pi polls the session until `mediaItemsSet`, lists the picked
+   items (100 per page), and downloads each `baseUrl` with `=w1600-h960` (bounded, aspect
+   preserved; our renderer does the cover-crop and dither) and an `Authorization: Bearer`
+   header. `baseUrl`s expire after 60 minutes, so download immediately, then delete the
+   session. The photos are now ordinary library entries; showing them never touches Google
+   again. The picked item `id` is stable across sessions and is stored to skip duplicates.
+4. **Adding more later** means picking again. There is no "follow this album": Google
+   removed that for third-party apps in March 2025. Anyone wanting automatic sync should
+   use Immich or a shared folder instead.
+
+Consent-screen status is the open risk: while the Cloud project is in "Testing", refresh
+tokens expire after 7 days (re-run step 1 weekly); publishing it "In production" removes
+that expiry but, if Google classes the Picker scope as sensitive, shows an "unverified app"
+warning on consent that the owner clicks through once. Acceptable for a one-household
+frame; the spike settles which it is.
+
+Acceptance: pick five photos on the phone, they appear in the library within a minute; a
+second pick of the same photos adds nothing; the token still works 8 days after setup (or
+the doc says exactly what to re-run).
 
 ### M6 — AI features *(each its own unit; pick from Ideas)*
 

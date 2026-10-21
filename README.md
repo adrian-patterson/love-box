@@ -27,8 +27,13 @@ with no cloud account.
   photos picked from Google Photos (through Google's Picker API; automatic album-following
   is no longer possible for third-party apps), curated quotes, and optional AI-written daily
   notes and photo captions through the Claude API.
-- **Modes**: pin one thing until you change it, rotate every few hours, or a fresh card each
-  morning, with quiet hours at night.
+- **Slideshow**: cycle through your photos, shuffled or in order, at an interval you set in
+  the UI. Default 15 minutes; the panel maker recommends at least 3 minutes between
+  refreshes, and the UI lets you go down to 15 seconds behind a warning. Every change is a
+  full refresh: about 4 seconds, with a visible black-and-white flash, and faster cycling
+  wears the panel sooner. Quiet hours stop refreshes at night.
+- **Other modes**: pin one message or photo until you change it, or a fresh card each
+  morning.
 - **Preview equals panel**: the page shows the exact 800x480 frame the e-paper will show.
 - **Boring to operate**: one-command deploy from your laptop, a systemd service, a health
   page, backups, and everything testable on a laptop without the hardware.
@@ -41,7 +46,7 @@ design: [docs/PLAN.md](docs/PLAN.md).
 
 | Part | Notes |
 |---|---|
-| [Waveshare 7.5" e-Paper HAT](https://www.waveshare.com/7.5inch-e-paper-hat.htm), V2 panel | 800x480, 1-bit black and white, SPI, ~4 s full refresh |
+| [Waveshare 7.5" e-Paper HAT](https://www.waveshare.com/7.5inch-e-paper-hat.htm), V2 panel | 800x480, 1-bit black and white, SPI. Every update is a ~4 s full refresh with a flash; no partial refresh in the Rust driver. Waveshare advises ≥180 s between refreshes for panel life |
 | Raspberry Pi Zero W | The original, single-core ARMv6, 512 MB. A Zero 2 W also fits the same case and HAT |
 | 5 V / 2.5 A micro-USB power supply | Into the port marked PWR IN. A thin or long cable causes brownouts |
 | microSD card, 8 GB or more | Buy one that ships with an SD adapter for flashing |
