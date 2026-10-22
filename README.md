@@ -19,6 +19,18 @@ with no cloud account.
 ![image](https://user-images.githubusercontent.com/47571939/163594608-162ef34d-f450-4de3-981d-98be82ceefe8.png)
 ![image](https://user-images.githubusercontent.com/47571939/163594590-a1441343-8cd4-471c-af65-96cdf93154f1.png)
 
+## The web interface
+
+The local web app works on a phone or desktop, in light and dark themes. These captures show the current interface running against the embedded service.
+
+![love-box web interface on desktop in the light theme](docs/screenshots/ui-desktop-light.png)
+
+| Phone · light theme | Phone · dark theme |
+|---|---|
+| ![Now screen on a phone in the light theme](docs/screenshots/ui-mobile-light.png) | ![Now screen on a phone in the dark theme](docs/screenshots/ui-mobile-dark.png) |
+
+![Photo library detail screen on a phone](docs/screenshots/ui-photo-detail.png)
+
 ## What it does
 
 - **Web page on your LAN** at `http://lovebox.local`. Anyone on the Wi-Fi can send a message
