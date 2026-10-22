@@ -8,7 +8,7 @@ All JSON is UTF-8. Timestamps are RFC 3339 UTC strings. Errors use one stable en
 {"error":{"code":"not_found","message":"Photo '01J...' was not found."}}
 ```
 
-The `message` is suitable for display. Common codes are `bad_request`, `validation_error`, `not_found`, `too_large`, `panel_unavailable`, `storage_error`, and `internal_error`. Malformed cards, invalid fields, unknown fonts, and renderer validation errors return 400; bodies above the upload limit return 413; missing IDs return 404; a wedged display returns 503; unexpected storage or rendering failures return 500. A failed request does not persist a mutation or advance the current-frame revision.
+The `message` is suitable for display. Common codes are `bad_request`, `validation_error`, `not_found`, `too_large`, `panel_unavailable`, `storage_error`, and `internal_error`. Malformed cards, invalid fields, unknown fonts, and renderer validation errors return 400; bodies above the upload limit return 413; missing IDs return 404; a wedged display returns 503; unexpected storage or rendering failures return 500. A failed request does not persist a mutation or advance the current-frame revision. If the panel updates successfully but writing the new state document then fails, `POST /api/show` returns 500 with an explicit partial-outcome message; the saved card, PNG, and revision remain unchanged, and the physical panel may differ until a later successful update.
 
 ## Cards and rendering
 
@@ -83,7 +83,7 @@ Renders, displays, then records the card as `now_showing` and adds one history e
 {"shown_at":"2026-10-22T10:00:00Z","frame_revision":3,"last_refresh_duration_ms":14}
 ```
 
-A missing photo returns 404. Invalid input returns 400. A wedged or unavailable panel returns 503 and leaves `now_showing` and the frame revision unchanged.
+A missing photo returns 404. Invalid input returns 400. A wedged or unavailable panel returns 503 and leaves `now_showing` and the frame revision unchanged. If panel I/O succeeds but the following atomic state write fails, the request returns 500 and says the physical panel may differ from saved state; the frame endpoint and revision continue to represent the last persisted display state.
 
 ### `POST /api/clear`
 

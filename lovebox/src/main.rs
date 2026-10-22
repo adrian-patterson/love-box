@@ -314,8 +314,10 @@ fn main() -> ExitCode {
 /// Plain-text logs on stderr for journald. `RUST_LOG` filters (default `info`); colour only
 /// on a terminal; no timestamp when journald is the sink, since it stamps every line.
 fn init_logging(configured: Option<&str>) {
-    let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new(configured.unwrap_or("info")));
+    let filter = configured
+        .and_then(|value| EnvFilter::try_new(value).ok())
+        .or_else(|| EnvFilter::try_from_default_env().ok())
+        .unwrap_or_else(|| EnvFilter::new("info"));
     let builder = tracing_subscriber::fmt()
         .with_env_filter(filter)
         .with_writer(io::stderr)

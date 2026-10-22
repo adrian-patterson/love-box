@@ -94,6 +94,9 @@ impl Config {
                 .parse()
                 .map_err(|_| "LOVEBOX_DECODE_LIMIT_MB must be a positive integer".to_owned())?;
         }
+        if let Some(value) = env.get("RUST_LOG") {
+            config.log = value.clone();
+        }
         if let Some(value) = env.get("LOVEBOX_LOG") {
             config.log = value.clone();
         }
@@ -173,5 +176,19 @@ mod tests {
         };
         let config = Config::load(None, &env, &flags).unwrap();
         assert_eq!(config.bind, "127.0.0.1:9002".parse().unwrap());
+    }
+
+    #[test]
+    fn command_line_log_overrides_both_environment_filters() {
+        let env = HashMap::from([
+            ("RUST_LOG".into(), "warn".into()),
+            ("LOVEBOX_LOG".into(), "debug".into()),
+        ]);
+        let flags = ConfigOverrides {
+            log: Some("trace".into()),
+            ..ConfigOverrides::default()
+        };
+        let config = Config::load(None, &env, &flags).unwrap();
+        assert_eq!(config.log, "trace");
     }
 }
