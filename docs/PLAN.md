@@ -44,6 +44,8 @@ specification of record; milestones get ticked here and decisions get recorded i
 4. **AI features: DECIDED — start with the daily note and photo captions** (Ideas #1 and #2),
    each as its own unit in M6, behind config flags.
 
+5. **Quote limit: DECIDED 2026-10-21 — 2,000 characters**, with 40 px margins and a 14 px minimum. Reject layout overflow explicitly; never truncate quotes. Board D-009 records the maintainer’s choice.
+
 ## Target architecture
 
 ```
@@ -86,33 +88,21 @@ The 2022 Python/React/Firebase code was removed from the tree on 2026-10-21 (tag
 `legacy-2022` holds the last commit with it). Its rendering baseline is recorded in
 AGENTS.md; nothing else from it is needed.
 
-## Where things stand (work paused 2026-10-21)
+## Where things stand (2026-10-22)
 
-Work is paused by the maintainer. Resume from this list; nothing is running.
+Work resumed under RESUME.handoff.01: finish the renderer, server, UI and compile-only panel support, one writer at a time. Stop before physical hardware access.
 
-- **Done on `master`:** M0; U-101 (toolchain, crate skeleton, ARMv6 cross-build, deploy
-  kit); from U-201, the `Frame` type, the `Panel` trait with `PngPanel`, the bundled OFL
-  fonts, message cards (2022 sizes), and quote cards (auto-fit 14–120 px, attribution,
-  left or centred, five faces), all with golden-frame tests. `make test`, `make lint`,
-  `make build-pi`, and the ARMv6 check pass at the pause.
-- **Parked on branch `wip/U-201-photo`:** photo ingest, cover-crop, and dithering. Two of
-  its integration tests fail and it is not formatted; the commit message lists both
-  failures. Finish it, then add the `lovebox render` and `lovebox fonts` CLI subcommands
-  and `make render-samples` to close U-201.
-- **Designed, not built:** the web UI ([UI-DESIGN.md](UI-DESIGN.md)).
-- **Not started:** U-202 (Waveshare panel, compile-only), U-301 (server, store, API,
-  import CLI), U-302 (web UI), M4 onward.
-- **Blocked on hardware:** U-102 (flash the card) and U-103 (first SSH, provision,
-  deploy) wait for the microSD adapter and power supply.
-- **Open question for the maintainer:** with 40 px margins and a 14 px floor, a full
-  3,000-character quote does not fit in most bundled faces. Measured capacity at the floor
-  is about 2,150 (Libre Baskerville) to 3,000 (EB Garamond Italic) characters. Choose one:
-  lower the limit to about 2,000, shrink the margins, or lower the floor.
+- **Accepted:** M0, U-101, U-201 renderer at `3089989` (D-011). All card types, photo ingest/crop/dither, CLI, fonts and render samples are complete; native tests/lint and ARMv6 cross-build/static check pass.
+- **Memory evidence:** macOS separate-process peak RSS: 40 MP baseline JPEG 48.4 MiB, 3000×2000 RGB16 TIFF 100 MiB with a 160 MiB decode budget. The budget estimates decode buffers, not total process RSS. Large progressive JPEGs may be rejected conservatively; use the laptop import path once available.
+- **Quote policy:** maximum 2,000 normalised characters; 40 px margins, 14 px floor. Layout overflow remains an explicit error, including unbreakable words.
+- **Next:** U-301 server/store/API/import, then U-302 web UI ([UI-DESIGN.md](UI-DESIGN.md)), then U-202 compile-only Waveshare panel.
+- **Blocked on hardware:** U-102 SD flash and U-103 first SSH/provision/deploy wait for the microSD adapter and power supply. No hardware validation or deployment has occurred.
+- **Backlog:** M4 Google Photos, M5 scheduler, M6 AI, M7 ops remain outside this resumption.
 
 ## Milestones
 
 Each milestone ends with an acceptance check the maintainer can do from a phone or a terminal.
-One writer at a time; a reader only for named questions. Board at
+One writer at a time; a reader only for named questions. Model policy (maintainer, 2026-10-22): Luna high for bounded work, Luna extra high for cross-cutting server/state work; escalate only with evidence, rather than using Sol 6.1 by default. Board at
 `.tmp/agents-messaging-board/`.
 
 ### M0 — Context and plan accepted  ✅ 2026-10-21
@@ -120,7 +110,7 @@ Deliverables: AGENTS.md, docs/, board, decisions D-001..D-003. Accepted by the m
 
 ### M1 — Pi reachable, provisioned, and deployable  *(active)*
 Units: U-101 Mac toolchain + `lovebox` crate skeleton + cross-build + deploy scripts —
-**accepted 2026-10-21 (D-004)**; U-102 flash SD card — image and cloud-init files prepared,
+**accepted 2026-10-21 (D-004)**; U-102 flash SD card — prior ephemeral image/cloud-init files lost (regenerate per PI-SETUP §0),
 **blocked on hardware**: a microSD-to-SD adapter (or new card with adapter) and a micro-USB
 power supply are on order; U-103 first SSH, provision per docs/PI-SETUP.md, deploy
 hello-world — blocked on U-102.
@@ -130,7 +120,7 @@ hello-world — blocked on U-102.
 - Acceptance: `ssh lovebox.local` works; `systemctl status lovebox` is active; journal shows
   the hello binary's log line.
 
-### M2 — Renderer and panel  *(U-201 in progress: text cards done, photos parked; U-202 not started)*
+### M2 — Renderer and panel  *(U-201 accepted; U-202 compile/on-panel pending)*
 - `lovebox` crate gains the `Panel` trait, `PngPanel`, and (U-202, compile-only until the Pi
   is up) `WavesharePanel`.
 - **Renderer** produces the 800x480 1-bit `Frame` for every card type:
@@ -140,7 +130,7 @@ hello-world — blocked on U-102.
     readable sans). **Size fits the content automatically**: the renderer searches for the
     largest size at which the wrapped text fits the frame with margins, from a generous
     maximum for a one-liner down to a floor around 14 px for a page of prose. Alignment
-    left or centred. **Maximum length ~3,000 characters** (roughly a book page); longer
+    left or centred. **Maximum length 2,000 characters**; longer
     input is rejected by the API with a clear message, never silently truncated.
   - *Photo*: decode JPEG, PNG, TIFF (8- and 16-bit), BMP, WebP; cover-crop to 800x480
     (optionally honour a focal point); grayscale with contrast normalisation; dither to
@@ -154,7 +144,7 @@ hello-world — blocked on U-102.
 - `lovebox render {message|quote|photo|clear} ... -o out.png` CLI for development and
   golden tests; the same code path backs `/api/preview` in M3.
 - Acceptance (U-201, on a laptop): golden-frame tests pass for each card type; a 40 MP
-  JPEG and a 16-bit TIFF render under the memory limit; a 3,000-character quote renders
+  JPEG and a 16-bit TIFF render under the memory limit; a 2,000-character prose quote renders
   at the floor size and a 12-word quote renders large. (U-202, on the Pi, later): a photo
   and a 48 pt message appear on the panel, no hang, panel sleeps after.
 

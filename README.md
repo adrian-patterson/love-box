@@ -38,10 +38,7 @@ with no cloud account.
 - **Boring to operate**: one-command deploy from your laptop, a systemd service, a health
   page, backups, and everything testable on a laptop without the hardware.
 
-Status (October 2026): the rewrite is in progress and currently paused. The toolchain,
-cross-build, and deploy kit exist (milestone M1), and the renderer draws messages and
-auto-fitted quotes; photos, the panel driver, the web app, and sources follow. Progress
-and design: [docs/PLAN.md](docs/PLAN.md).
+Status (October 2026): the renderer is accepted: messages, auto-fitted quotes up to 2,000 characters, memory-budgeted photos, dithering, PNG output and development CLI. The toolchain, ARMv6 cross-build and deploy kit exist. The local server, web UI and compile-only panel driver are next; deployment and on-panel validation wait for hardware. Progress: [docs/PLAN.md](docs/PLAN.md).
 
 ## Hardware
 
@@ -70,8 +67,7 @@ CS 8 (SPI0 CE0), BUSY 24; SPI0 at 4 MHz. SPI is enabled at first boot by the set
 | Network | mDNS (`lovebox.local`) via avahi; LAN only |
 | Build | Cross-compiled on a laptop with `cargo-zigbuild` to `arm-unknown-linux-gnueabihf`; `make build-pi` |
 
-Milestone M1 delivered the build and deploy layers; the rest is specified in the plan and
-not yet built.
+The build/deploy kit and renderer are implemented; the remaining layers are specified in the plan.
 
 ## Repository
 

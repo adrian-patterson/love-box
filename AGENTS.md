@@ -12,9 +12,9 @@ frame, one household, no cloud account.
 
 Status: **rewrite in progress.** The 2022 Python/React/Firebase implementation was removed
 from the tree in October 2026 (git tag `legacy-2022` holds the last commit that has it). What
-exists now: a Rust crate that cross-builds for the Pi, a deploy kit, and the start of the
-renderer (frame type, `Panel` trait with a PNG implementation, bundled fonts, message and
-quote cards). Work is paused; [docs/PLAN.md](docs/PLAN.md) "Where things stand" says
+exists now: a Rust crate that cross-builds for the Pi, a deploy kit, and the complete renderer
+(frame, PNG panel, bundled fonts, message/quote/photo/clear cards, development CLI).
+Server, UI and compile-only hardware support are next; [docs/PLAN.md](docs/PLAN.md) "Where things stand" says
 what is done, parked, and next.
 The plan is in [docs/PLAN.md](docs/PLAN.md); durable decisions are in
 [docs/decisions/](docs/decisions/). Work on the next unfinished milestone there.
@@ -75,6 +75,7 @@ to PATH itself.
 |---|---|
 | `make test` | `cargo test` in `lovebox/` (native) |
 | `make lint` | `cargo fmt --check && cargo clippy --all-targets -- -D warnings` |
+| `make render-samples` | Render generated message, quote, photo and clear PNGs into `out/`. |
 | `make run` | `cargo run -- serve` natively |
 | `make build-pi` | `cargo zigbuild --release --target arm-unknown-linux-gnueabihf.2.36` → `lovebox/target/arm-unknown-linux-gnueabihf/release/lovebox` |
 | `make check-pi` | build-pi, then `deploy/check-pi.sh`: proves `Tag_CPU_arch: v6` with `readelf -A` and runs the binary under Docker emulation (see deploy/README.md for the Docker/binfmt setup) |
