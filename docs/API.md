@@ -21,7 +21,7 @@ The API card is a JSON DTO. It is intentionally separate from the renderer's Rus
 `size` is one of `30`, `48`, `64`, or `96` pixels. `font` is a stable font ID from `GET /api/fonts`; it may be omitted to use the saved default font. Message text is limited to 3,000 characters. Fixed-size messages keep the renderer's baseline layout and truncate overflow with `...`.
 
 ```json
-{"type":"quote","text":"Hold fast to dreams.","attribution":"Langston Hughes","font":"eb-garamond","align":"center"}
+{"type":"quote","text":"Hold fast to dreams.","attribution":"A reader","font":"eb-garamond","align":"center"}
 ```
 
 `attribution` is optional, `font` defaults to the saved default font, and `align` is `left` or `center` (default `left`). Quotes are auto-fit from 14 to 120 px with the renderer's 40 px margins. The normalized text limit is 2,000 characters; text that cannot fit at the minimum size is rejected with the renderer's message.
@@ -193,7 +193,7 @@ Returns `{ "items":[Quote], "total":1 }`, newest first.
 Request:
 
 ```json
-{"text":"Hold fast to dreams.","attribution":"Langston Hughes","font":"eb-garamond","align":"center","in_rotation":true}
+{"text":"Hold fast to dreams.","attribution":"A reader","font":"eb-garamond","align":"center","in_rotation":true}
 ```
 
 Returns 201 with the new quote, including its server-generated ID. Unknown fonts, empty quotes, and text over 2,000 characters return 400. A 2,001-character input receives the renderer's quote-limit message.

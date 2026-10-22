@@ -8,7 +8,15 @@
 //!
 //! The binary (`src/main.rs`) holds the CLI and the `serve` loop.
 
+pub mod api;
+pub mod config;
+pub mod display;
 pub mod fonts;
 pub mod frame;
+pub mod import;
+pub mod library;
 pub mod panel;
 pub mod render;
+pub mod sources;
+pub mod store;
+pub mod web;

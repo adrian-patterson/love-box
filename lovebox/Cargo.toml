@@ -18,9 +18,23 @@ image = { version = "0.25.10", default-features = false, features = ["jpeg", "pn
 png = "0.18.1"
 # Reduced IDCT decoding, no rayon: one worker on the Pi Zero W.
 jpeg-decoder = { version = "0.3.2", default-features = false }
-tokio = { version = "1.54.0", default-features = false, features = ["rt", "macros", "signal", "time"] }
+tokio = { version = "1.54.0", default-features = false, features = ["rt", "macros", "signal", "time", "sync", "net", "io-util"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", default-features = false, features = ["fmt", "std", "env-filter", "ansi"] }
+axum = { version = "0.8", features = ["multipart"] }
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
+kamadak-exif = "0.6"
+rust-embed = "8"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.9"
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+ulid = "1"
+ureq = { version = "2.12", default-features = false }
+
+[dev-dependencies]
+http-body-util = "0.1"
+tempfile = "3"
 
 # Optimise dependencies (image decoders, font rasteriser) in dev and test builds, so the
 # 24 MP decode tests run in seconds; our own crate stays at opt-level 0 for fast rebuilds.
