@@ -8,7 +8,7 @@ use ulid::Ulid;
 
 use super::common::{now, ApiJson};
 use super::error::ApiError;
-use super::types::{ApiAlign, Quote};
+use super::types::{ApiAlign, PatchField, Quote};
 use super::AppState;
 use crate::render::{fit_quote, Align, QuoteSpec};
 
@@ -25,7 +25,8 @@ pub struct QuoteCreateRequest {
 #[derive(Deserialize, Default)]
 pub struct QuotePatchRequest {
     pub text: Option<String>,
-    pub attribution: Option<serde_json::Value>,
+    #[serde(default, deserialize_with = "super::types::deserialize_patch_field")]
+    pub attribution: PatchField<String>,
     pub font: Option<String>,
     pub align: Option<ApiAlign>,
     pub in_rotation: Option<bool>,
@@ -100,10 +101,9 @@ pub async fn patch(
         .ok_or_else(|| ApiError::not_found(format!("Quote '{id}' was not found.")))?;
     let text = request.text.unwrap_or(existing.text.clone());
     let attribution = match request.attribution {
-        None => existing.attribution.clone(),
-        Some(serde_json::Value::Null) => None,
-        Some(serde_json::Value::String(value)) => Some(value),
-        Some(_) => return Err(ApiError::bad("attribution must be a string or null")),
+        PatchField::Missing => existing.attribution.clone(),
+        PatchField::Null => None,
+        PatchField::Value(value) => Some(value),
     };
     let font = request.font.unwrap_or(existing.font.clone());
     let align = request.align.unwrap_or(existing.align);

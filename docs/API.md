@@ -142,7 +142,7 @@ Returns newest first:
 
 ### `POST /api/photos`
 
-Accepts one `multipart/form-data` file per request. The request body is capped at 64 MiB. The required part is `file`; optional text parts are `caption`, `focal_x`, `focal_y`, `dither` (`floyd_steinberg` or `atkinson`), `enhance` (`true` or `false`), `source_id`, and `in_rotation`. The server serializes image ingest so uploads wait before accumulating their multipart file bytes.
+Accepts one `multipart/form-data` file per request. The request body is capped at 64 MiB. The required part is `file`; optional text parts are `caption`, `focal_x`, `focal_y`, `dither` (`floyd_steinberg` or `atkinson`), `enhance` (`true` or `false`), `source_id`, and `in_rotation`. If omitted, `dither` and `enhance` use the saved settings defaults. The server serializes image ingest so uploads wait before accumulating their multipart file bytes.
 
 ```sh
 curl -F 'file=@beach.jpg' -F 'caption=Summer by the sea' http://lovebox.local/api/photos
@@ -168,7 +168,7 @@ Returns the dithered 800×480 preview for the photo with its saved render contro
 
 ### `PATCH /api/photos/{id}`
 
-Updates any supplied subset of `caption`, `focal`, `dither`, `enhance`, or `in_rotation`. `focal` is `null` or `{ "x":0.5,"y":0.5 }` with each coordinate in 0..=1. Dither is `floyd_steinberg` or `atkinson`.
+Updates any supplied subset of `caption`, `focal`, `dither`, `enhance`, or `in_rotation`. Omit a field to leave it unchanged; send `null` for `caption` or `focal` to clear it. `focal` can also be `{ "x":0.5,"y":0.5 }` with each coordinate in 0..=1. Dither is `floyd_steinberg` or `atkinson`.
 
 ```json
 {"focal":{"x":0.7,"y":0.4},"dither":"atkinson","in_rotation":false}
@@ -183,6 +183,8 @@ Deletes the metadata and files; returns 204. If that photo is currently displaye
 ## Quotes
 
 A saved quote is `{ "id":"01J...", "text":"...", "attribution":null, "font":"eb-garamond", "align":"left", "added_at":"...", "shown_count":0, "last_shown_at":null, "in_rotation":true }`. Text uses the renderer's normalized 2,000-character limit; the renderer's validation message is returned verbatim.
+
+On `PATCH /api/quotes/{id}`, omit `attribution` to leave it unchanged, send a string to set it, or send `null` to clear it.
 
 ### `GET /api/quotes`
 

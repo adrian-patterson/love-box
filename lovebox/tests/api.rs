@@ -225,6 +225,20 @@ async fn local_api_and_web_contract_round_trip() {
     .await;
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(json(response).await["total"], 0);
+    let upload_defaults = serde_json::json!({
+        "default_font":"eb-garamond","default_dither":"atkinson","enhance":false,
+        "quiet_hours":{"start":"23:00","end":"07:00","enabled":false},
+        "slideshow":{"interval_s":900,"order":"shuffle","set":"all"},"mode":"pinned"
+    });
+    let response = request(
+        &app,
+        Method::PUT,
+        "/api/settings",
+        Some("application/json"),
+        json_body(upload_defaults),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
     let (content_type, body) = multipart(&png_bytes(), "sample.png");
     let response = request(&app, Method::POST, "/api/photos", Some(&content_type), body).await;
     assert_eq!(response.status(), StatusCode::CREATED);
@@ -232,6 +246,8 @@ async fn local_api_and_web_contract_round_trip() {
     let photo_id = photo["id"].as_str().unwrap().to_owned();
     assert_eq!(photo["filename_original"], "sample.png");
     assert!(photo["width"].as_u64().unwrap() <= 1600);
+    assert_eq!(photo["dither"], "atkinson");
+    assert_eq!(photo["enhance"], false);
 
     let response = request(
         &app,
@@ -285,13 +301,39 @@ async fn local_api_and_web_contract_round_trip() {
         Method::PATCH,
         &format!("/api/photos/{photo_id}"),
         Some("application/json"),
-        br#"{"focal":{"x":0.7,"y":0.4},"dither":"atkinson","in_rotation":false}"#.to_vec(),
+        br#"{"caption":"A framed moment","focal":{"x":0.7,"y":0.4},"dither":"atkinson","in_rotation":false}"#.to_vec(),
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
     let patched = json(response).await;
     assert_eq!(patched["dither"], "atkinson");
     assert_eq!(patched["in_rotation"], false);
+    assert_eq!(patched["caption"], "A framed moment");
+    assert_eq!(patched["focal"], serde_json::json!({"x":0.7,"y":0.4}));
+    let response = request(
+        &app,
+        Method::PATCH,
+        &format!("/api/photos/{photo_id}"),
+        Some("application/json"),
+        br#"{"in_rotation":true}"#.to_vec(),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let unchanged = json(response).await;
+    assert_eq!(unchanged["caption"], "A framed moment");
+    assert_eq!(unchanged["focal"], serde_json::json!({"x":0.7,"y":0.4}));
+    let response = request(
+        &app,
+        Method::PATCH,
+        &format!("/api/photos/{photo_id}"),
+        Some("application/json"),
+        br#"{"caption":null,"focal":null}"#.to_vec(),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let cleared = json(response).await;
+    assert_eq!(cleared["caption"], serde_json::Value::Null);
+    assert_eq!(cleared["focal"], serde_json::Value::Null);
     let response = request(&app, Method::GET, "/api/photos?limit=0", None, vec![]).await;
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let response = request(&app, Method::GET, "/api/photos?offset=nope", None, vec![]).await;
@@ -372,11 +414,34 @@ async fn local_api_and_web_contract_round_trip() {
         Method::PATCH,
         &format!("/api/quotes/{quote_id}"),
         Some("application/json"),
-        br#"{"text":"A kinder thought","in_rotation":false}"#.to_vec(),
+        br#"{"text":"A kinder thought","attribution":"A different reader","in_rotation":false}"#
+            .to_vec(),
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(json(response).await["in_rotation"], false);
+    let updated_quote = json(response).await;
+    assert_eq!(updated_quote["in_rotation"], false);
+    assert_eq!(updated_quote["attribution"], "A different reader");
+    let response = request(
+        &app,
+        Method::PATCH,
+        &format!("/api/quotes/{quote_id}"),
+        Some("application/json"),
+        br#"{"text":"A thought that remains"}"#.to_vec(),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(json(response).await["attribution"], "A different reader");
+    let response = request(
+        &app,
+        Method::PATCH,
+        &format!("/api/quotes/{quote_id}"),
+        Some("application/json"),
+        br#"{"attribution":null}"#.to_vec(),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(json(response).await["attribution"], serde_json::Value::Null);
     let long_quote = "a".repeat(2001);
     let response = request(
         &app,

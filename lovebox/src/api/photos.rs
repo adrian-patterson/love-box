@@ -13,7 +13,7 @@ use tokio::task;
 
 use super::common::ApiJson;
 use super::error::ApiError;
-use super::types::{DitherChoice, FocalPoint, PhotoMeta};
+use super::types::{DitherChoice, FocalPoint, PatchField, PhotoMeta};
 use super::AppState;
 use crate::library::{PhotoOptions, PhotoPatch};
 
@@ -28,8 +28,10 @@ pub struct PhotoListQuery {
 
 #[derive(Deserialize, Default)]
 pub struct PhotoPatchRequest {
-    pub caption: Option<serde_json::Value>,
-    pub focal: Option<serde_json::Value>,
+    #[serde(default, deserialize_with = "super::types::deserialize_patch_field")]
+    pub caption: PatchField<String>,
+    #[serde(default, deserialize_with = "super::types::deserialize_patch_field")]
+    pub focal: PatchField<FocalPoint>,
     pub dither: Option<DitherChoice>,
     pub enhance: Option<bool>,
     pub in_rotation: Option<bool>,
@@ -152,15 +154,17 @@ pub async fn upload(
             ))
         }
     };
+    let settings = app.store.snapshot().settings;
     let dither = fields
         .get("dither")
         .map(|value| parse_dither(value))
         .transpose()?
-        .unwrap_or_default();
+        .unwrap_or(settings.default_dither);
     let enhance = fields
         .get("enhance")
         .map(|value| parse_bool(value, "enhance"))
-        .transpose()?;
+        .transpose()?
+        .unwrap_or(settings.enhance);
     let in_rotation = fields
         .get("in_rotation")
         .map(|value| parse_bool(value, "in_rotation"))
@@ -169,7 +173,7 @@ pub async fn upload(
         caption: fields.remove("caption"),
         focal,
         dither,
-        enhance,
+        enhance: Some(enhance),
         source_id: fields.remove("source_id"),
         in_rotation,
     };
@@ -223,8 +227,16 @@ pub async fn patch(
     Path(id): Path<String>,
     ApiJson(request): ApiJson<PhotoPatchRequest>,
 ) -> Result<Json<PhotoMeta>, ApiError> {
-    let caption = request.caption.map(parse_nullable_string).transpose()?;
-    let focal = request.focal.map(parse_nullable_focal).transpose()?;
+    let caption = match request.caption {
+        PatchField::Missing => None,
+        PatchField::Null => Some(None),
+        PatchField::Value(value) => Some(Some(value)),
+    };
+    let focal = match request.focal {
+        PatchField::Missing => None,
+        PatchField::Null => Some(None),
+        PatchField::Value(value) => Some(Some(validate_focal(value)?)),
+    };
     let patch = PhotoPatch {
         caption,
         focal,
@@ -284,20 +296,7 @@ fn parse_bool(value: &str, name: &str) -> Result<bool, ApiError> {
     }
 }
 
-fn parse_nullable_string(value: serde_json::Value) -> Result<Option<String>, ApiError> {
-    match value {
-        serde_json::Value::Null => Ok(None),
-        serde_json::Value::String(value) => Ok(Some(value)),
-        _ => Err(ApiError::bad("caption must be a string or null")),
-    }
-}
-
-fn parse_nullable_focal(value: serde_json::Value) -> Result<Option<FocalPoint>, ApiError> {
-    if value.is_null() {
-        return Ok(None);
-    }
-    let focal: FocalPoint = serde_json::from_value(value)
-        .map_err(|_| ApiError::bad("focal must be null or an object with numeric x and y"))?;
+fn validate_focal(focal: FocalPoint) -> Result<FocalPoint, ApiError> {
     if !focal.x.is_finite()
         || !focal.y.is_finite()
         || !(0.0..=1.0).contains(&focal.x)
@@ -307,5 +306,5 @@ fn parse_nullable_focal(value: serde_json::Value) -> Result<Option<FocalPoint>, 
             "focal coordinates must be in the range 0..=1",
         ));
     }
-    Ok(Some(focal))
+    Ok(focal)
 }

@@ -1,8 +1,32 @@
 use std::collections::VecDeque;
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::render::{Align, Dither};
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum PatchField<T> {
+    Missing,
+    Null,
+    Value(T),
+}
+
+impl<T> Default for PatchField<T> {
+    fn default() -> Self {
+        Self::Missing
+    }
+}
+
+pub fn deserialize_patch_field<'de, D, T>(deserializer: D) -> Result<PatchField<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Ok(match Option::<T>::deserialize(deserializer)? {
+        Some(value) => PatchField::Value(value),
+        None => PatchField::Null,
+    })
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "type", rename_all = "snake_case")]
