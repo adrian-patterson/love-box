@@ -189,8 +189,9 @@ Grouped sections, each a card with a heading.
   15 min, 30 min, 1 h, 3 h, 6 h, 12 h, 24 h), default 15 min. Choosing anything under
   3 min shows an amber inline note, not a dialog: "Faster than every 3 minutes means a
   visible flash each time and wears the panel sooner. The panel maker recommends at least 3
-  minutes." Below it: order (Shuffle · In order) and what rotates (Photos, Quotes
-  checkboxes).
+  minutes." Below it: order (Shuffle · In order) and the server-supported selection scope (`all` or a
+  tag). Photo and quote inclusion is changed on each library item; the server settings contract
+  does not expose separate Photos and Quotes toggles.
 - **Quiet hours**: a switch, then "From" and "To" time inputs (`type="time"`). Helper:
   "No refreshes in this window; the frame keeps the last image."
 - **Sources**: rows for Google Photos and AI notes. Each shows its state ("Not set up",

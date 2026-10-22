@@ -27,9 +27,14 @@ ifneq ($(wildcard $(ZIG_VENV)/bin/python),)
 export CARGO_ZIGBUILD_PYTHON_PATH ?= $(ZIG_VENV)/bin/python
 endif
 
-.PHONY: build-pi check-pi deploy rollback backup test lint run
+.PHONY: web-build build-pi check-pi deploy rollback backup test lint run
 
-build-pi:
+NPM ?= $(shell command -v npm 2>/dev/null || printf '%s/.nvm/versions/node/v24.18.0/bin/npm' "$(HOME)")
+
+web-build:
+	cd web && $(NPM) ci && $(NPM) run build
+
+build-pi: web-build
 	cd $(CRATE) && cargo zigbuild --release --target $(PI_TARGET).$(PI_GLIBC)
 	@ls -l $(PI_BIN)
 
@@ -45,13 +50,13 @@ rollback:
 backup:
 	deploy/backup.sh $(HOST) $(DEST)
 
-test:
+test: web-build
 	cd $(CRATE) && cargo test
 
-lint:
+lint: web-build
 	cd $(CRATE) && cargo fmt --check && cargo clippy --all-targets -- -D warnings
 
-run:
+run: web-build
 	cd $(CRATE) && cargo run -- serve
 
 .PHONY: render-samples

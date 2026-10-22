@@ -17,6 +17,7 @@ fn main() {
     println!("cargo:rustc-env=LOVEBOX_GIT_SHA={sha}");
 
     println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=../web/dist");
     println!("cargo:rerun-if-env-changed=LOVEBOX_GIT_SHA");
     // Rebuild when HEAD moves. Only existing paths are emitted: cargo treats a missing
     // rerun-if-changed path as always changed.

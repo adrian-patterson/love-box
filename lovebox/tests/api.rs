@@ -128,7 +128,15 @@ async fn local_api_and_web_contract_round_trip() {
             .to_vec(),
     )
     .unwrap()
-    .contains("UI not built yet"));
+    .contains("love-box"));
+    for asset in ["/manifest.webmanifest", "/apple-touch-icon.png"] {
+        let response = request(&app, Method::GET, asset, None, vec![]).await;
+        assert_eq!(
+            response.status(),
+            StatusCode::OK,
+            "missing embedded asset {asset}"
+        );
+    }
     let response = request(&app, Method::GET, "/some/spa/route", None, vec![]).await;
     assert_eq!(response.status(), StatusCode::OK);
     let response = request(&app, Method::GET, "/assets/missing.js", None, vec![]).await;
