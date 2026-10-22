@@ -4,17 +4,12 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PanelKind {
+    #[default]
     Png,
     Waveshare,
-}
-
-impl Default for PanelKind {
-    fn default() -> Self {
-        Self::Png
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

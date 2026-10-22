@@ -199,6 +199,23 @@ mod tests {
     }
 
     #[test]
+    fn failed_atomic_replace_keeps_memory_unchanged_and_cleans_temp_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        fs::remove_file(store.state_path()).unwrap();
+        fs::create_dir(store.state_path()).unwrap();
+        let before = store.snapshot();
+        assert!(store
+            .update(|state| {
+                state.settings.mode = crate::api::types::DisplayMode::Daily;
+                Ok(())
+            })
+            .is_err());
+        assert_eq!(store.snapshot(), before);
+        assert!(!dir.path().join("state.json.tmp").exists());
+    }
+
+    #[test]
     fn future_state_version_is_rejected_without_quarantine() {
         let dir = tempfile::tempdir().unwrap();
         fs::write(dir.path().join("state.json"), br#"{"version":999}"#).unwrap();
@@ -216,12 +233,15 @@ mod tests {
         store
             .update(|state| {
                 for idx in 0..510 {
-                    state.record_shown(Shown {
-                        card: ApiCard::Clear,
-                        shown_at: idx.to_string(),
-                        duration_ms: 1,
-                        frame_revision: idx,
-                    });
+                    state.record_shown(
+                        Shown {
+                            card: ApiCard::Clear,
+                            shown_at: idx.to_string(),
+                            duration_ms: 1,
+                            frame_revision: idx,
+                        },
+                        Vec::new(),
+                    );
                 }
                 Ok(())
             })

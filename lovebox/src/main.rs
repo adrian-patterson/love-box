@@ -10,13 +10,20 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
+use lovebox::api::{self, AppState};
+use lovebox::config::{Config, ConfigOverrides, PanelKind};
+use lovebox::display::DisplayHandle;
 use lovebox::fonts::{Fonts, DEFAULT_FONT};
+use lovebox::import;
+use lovebox::library::Library;
+use lovebox::panel::{Panel, PanelError, PngPanel};
 use lovebox::render::{
     self, photo, Align, Card, Dither, IngestLimits, MessageSize, PhotoSpec, QuoteSpec, RenderError,
 };
+use tokio::net::TcpListener;
 use tokio::signal::unix::{signal, SignalKind};
 use tokio::time::{interval_at, Instant, MissedTickBehavior};
-use tracing::{error, info};
+use tracing::info;
 use tracing_subscriber::EnvFilter;
 
 /// Crate version from Cargo.toml.
@@ -43,6 +50,24 @@ enum Command {
     Render(RenderArgs),
     /// List bundled font ids and display names.
     Fonts,
+    /// Import one or more photos from this computer to a running frame.
+    Import(ImportArgs),
+}
+
+#[derive(Args, Debug, PartialEq, Eq)]
+struct ImportArgs {
+    /// Photo files to send to the frame.
+    #[arg(required = true)]
+    files: Vec<PathBuf>,
+    /// Base URL of the frame service.
+    #[arg(long, default_value = "http://lovebox.local")]
+    host: String,
+    /// Optional caption applied to each imported photo.
+    #[arg(long)]
+    caption: Option<String>,
+    /// Optional dithering method.
+    #[arg(long, value_enum)]
+    dither: Option<CliDither>,
 }
 
 #[derive(Args, Debug, PartialEq)]
@@ -199,6 +224,24 @@ fn render_command(args: RenderArgs) -> Result<(), RenderError> {
 
 #[derive(Args, Debug, PartialEq, Eq)]
 struct ServeArgs {
+    /// TOML configuration file (default: /etc/lovebox/config.toml when present).
+    #[arg(long)]
+    config: Option<PathBuf>,
+    /// HTTP bind address.
+    #[arg(long)]
+    bind: Option<String>,
+    /// Local state and photo directory.
+    #[arg(long)]
+    data_dir: Option<PathBuf>,
+    /// Display backend.
+    #[arg(long, value_enum)]
+    panel: Option<CliPanel>,
+    /// Photo decode allocation limit in MiB.
+    #[arg(long, value_parser = clap::value_parser!(u64).range(1..=4096))]
+    decode_limit_mb: Option<u64>,
+    /// Tracing filter (for example info or debug).
+    #[arg(long)]
+    log: Option<String>,
     /// Seconds between heartbeat log lines.
     #[arg(long, default_value_t = DEFAULT_HEARTBEAT_SECS,
           value_parser = clap::value_parser!(u64).range(1..))]
@@ -208,18 +251,51 @@ struct ServeArgs {
 impl Default for ServeArgs {
     fn default() -> Self {
         Self {
+            config: None,
+            bind: None,
+            data_dir: None,
+            panel: None,
+            decode_limit_mb: None,
+            log: None,
             heartbeat_secs: DEFAULT_HEARTBEAT_SECS,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+enum CliPanel {
+    Png,
+    Waveshare,
+}
+
+impl From<CliPanel> for PanelKind {
+    fn from(value: CliPanel) -> Self {
+        match value {
+            CliPanel::Png => Self::Png,
+            CliPanel::Waveshare => Self::Waveshare,
         }
     }
 }
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
-    init_logging();
     let result = match cli.command.unwrap_or(Command::Serve(ServeArgs::default())) {
         Command::Serve(args) => serve(&args).map_err(RenderError::from),
-        Command::Render(args) => render_command(args),
+        Command::Render(args) => {
+            init_logging(None);
+            render_command(args)
+        }
+        Command::Import(args) => {
+            init_logging(None);
+            let dither = args.dither.map(|value| match value {
+                CliDither::FloydSteinberg => Dither::FloydSteinberg,
+                CliDither::Atkinson => Dither::Atkinson,
+            });
+            import::import_files(&args.files, &args.host, args.caption.as_deref(), dither)
+                .map_err(RenderError::InvalidInput)
+        }
         Command::Fonts => {
+            init_logging(None);
             for face in Fonts::bundled().faces() {
                 println!("{}\t{}", face.id(), face.display_name());
             }
@@ -229,7 +305,7 @@ fn main() -> ExitCode {
     match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
-            error!("fatal: {err}");
+            eprintln!("fatal: {err}");
             ExitCode::FAILURE
         }
     }
@@ -237,8 +313,9 @@ fn main() -> ExitCode {
 
 /// Plain-text logs on stderr for journald. `RUST_LOG` filters (default `info`); colour only
 /// on a terminal; no timestamp when journald is the sink, since it stamps every line.
-fn init_logging() {
-    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+fn init_logging(configured: Option<&str>) {
+    let filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new(configured.unwrap_or("info")));
     let builder = tracing_subscriber::fmt()
         .with_env_filter(filter)
         .with_writer(io::stderr)
@@ -276,33 +353,74 @@ fn serve(args: &ServeArgs) -> io::Result<()> {
     tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?
-        .block_on(run(Duration::from_secs(args.heartbeat_secs)))
+        .block_on(run(args))
 }
 
-async fn run(heartbeat_every: Duration) -> io::Result<()> {
+async fn run(args: &ServeArgs) -> io::Result<()> {
+    let config_path = args.config.clone().or_else(|| {
+        let default = PathBuf::from("/etc/lovebox/config.toml");
+        default.exists().then_some(default)
+    });
+    let env: std::collections::HashMap<String, String> = std::env::vars().collect();
+    let overrides = ConfigOverrides {
+        bind: args.bind.clone(),
+        data_dir: args.data_dir.clone(),
+        panel: args.panel.map(Into::into),
+        decode_limit_mb: args.decode_limit_mb,
+        log: args.log.clone(),
+    };
+    let config = Config::load(config_path.as_deref(), &env, &overrides)
+        .map_err(|message| io::Error::new(io::ErrorKind::InvalidInput, message))?;
+    init_logging(Some(&config.log));
+
+    std::fs::create_dir_all(&config.data_dir)?;
+    let store = std::sync::Arc::new(
+        lovebox::store::Store::open(&config.data_dir)
+            .map_err(|e| io::Error::other(e.to_string()))?,
+    );
+    let library = Library::new(&config.data_dir, store.clone(), config.decode_limit_mb);
+    let panel_dir = config.data_dir.join("panel");
+    let panel_kind = config.panel;
+    let display = DisplayHandle::start(
+        move || match panel_kind {
+            PanelKind::Png => Ok(Box::new(PngPanel::new(panel_dir)) as Box<dyn Panel>),
+            PanelKind::Waveshare => Err(PanelError::Device(
+                "waveshare support is not built into this binary".to_owned(),
+            )),
+        },
+        Duration::from_secs(10),
+        Duration::from_secs(45),
+    )
+    .map_err(|e| io::Error::other(e.to_string()))?;
+    let state = std::sync::Arc::new(AppState::new(config.clone(), store, library, display));
+    let app = api::router(state);
+    let listener = TcpListener::bind(config.bind).await?;
+
     // Register handlers before announcing readiness so an early signal is not missed.
     let mut sigterm = signal(SignalKind::terminate())?;
     let mut sigint = signal(SignalKind::interrupt())?;
     info!("{}", startup_line(&hostname()));
+    info!(bind = %config.bind, panel = ?config.panel, "HTTP service ready");
 
+    let heartbeat_every = Duration::from_secs(args.heartbeat_secs);
     let started = Instant::now();
-    let mut heartbeat = interval_at(started + heartbeat_every, heartbeat_every);
-    heartbeat.set_missed_tick_behavior(MissedTickBehavior::Delay);
-    loop {
-        tokio::select! {
-            _ = heartbeat.tick() => {
-                info!(uptime_s = started.elapsed().as_secs(), "heartbeat");
-            }
-            _ = sigterm.recv() => {
-                info!("received SIGTERM, exiting");
-                return Ok(());
-            }
-            _ = sigint.recv() => {
-                info!("received SIGINT, exiting");
-                return Ok(());
-            }
+    let heartbeat = tokio::spawn(async move {
+        let mut heartbeat = interval_at(started + heartbeat_every, heartbeat_every);
+        heartbeat.set_missed_tick_behavior(MissedTickBehavior::Delay);
+        loop {
+            heartbeat.tick().await;
+            info!(uptime_s = started.elapsed().as_secs(), "heartbeat");
         }
-    }
+    });
+    let server = axum::serve(listener, app).with_graceful_shutdown(async move {
+        tokio::select! {
+            _ = sigterm.recv() => info!("received SIGTERM, exiting"),
+            _ = sigint.recv() => info!("received SIGINT, exiting"),
+        }
+    });
+    let result = server.await;
+    heartbeat.abort();
+    result
 }
 
 #[cfg(test)]

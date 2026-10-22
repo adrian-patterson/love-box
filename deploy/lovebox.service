@@ -14,7 +14,7 @@ User=lovebox
 SupplementaryGroups=spi gpio
 EnvironmentFile=-/etc/lovebox/secrets.env
 Environment=RUST_LOG=info
-ExecStart=/opt/lovebox/lovebox serve
+ExecStart=/opt/lovebox/lovebox serve --config /etc/lovebox/config.toml
 Restart=on-failure
 RestartSec=5
 ProtectSystem=strict

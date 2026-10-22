@@ -16,7 +16,7 @@
 # Resulting layout:
 #   /opt/lovebox/                root:root      0755  binary, replaced by deploy.sh
 #   /etc/lovebox/                root:lovebox   0750
-#   /etc/lovebox/config.toml     root:lovebox   0640  created empty if absent, never overwritten
+#   /etc/lovebox/config.toml     root:lovebox   0640  Pi defaults if absent, never overwritten
 #   /etc/lovebox/secrets.env     (not created)  0600 root:lovebox when you add it by hand
 #   /var/lib/lovebox/            lovebox:lovebox 0750  state; group-readable for backup.sh
 #   /var/lib/lovebox/photos/     lovebox:lovebox 0750
@@ -52,8 +52,14 @@ echo "provision: directories /opt/lovebox /etc/lovebox /var/lib/lovebox/photos i
 if [[ ! -e /etc/lovebox/config.toml ]]; then
   tmp="$(mktemp)"
   printf '%s\n' \
-    '# lovebox configuration (non-secret). Empty means built-in defaults.' \
+    '# lovebox configuration (non-secret). Values here are overridden by LOVEBOX_* env vars' \
+    '# and then by command-line flags.' \
     '# Secrets (API keys, tokens) go in /etc/lovebox/secrets.env, mode 0600 root:lovebox.' \
+    'bind = "0.0.0.0:80"' \
+    'data_dir = "/var/lib/lovebox"' \
+    'panel = "png"' \
+    'decode_limit_mb = 160' \
+    'log = "info"' \
     > "$tmp"
   install -o root -g lovebox -m 0640 "$tmp" /etc/lovebox/config.toml
   rm -f "$tmp"

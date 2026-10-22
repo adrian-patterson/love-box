@@ -5,6 +5,7 @@ use std::sync::Arc;
 use chrono::{NaiveDateTime, Utc};
 use exif::{In, Tag};
 use image::{ImageFormat, RgbImage};
+use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tokio::task;
 use tracing::warn;
 use ulid::Ulid;
@@ -29,6 +30,7 @@ pub struct Library {
     root: PathBuf,
     store: Arc<Store>,
     ingest_limits: IngestLimits,
+    ingest_gate: Arc<Semaphore>,
 }
 
 impl Library {
@@ -38,7 +40,16 @@ impl Library {
             store,
             ingest_limits: IngestLimits::pi()
                 .with_max_alloc(decode_limit_mb.saturating_mul(1024 * 1024)),
+            ingest_gate: Arc::new(Semaphore::new(1)),
         }
+    }
+
+    pub async fn acquire_ingest(&self) -> Result<OwnedSemaphorePermit, LibraryError> {
+        self.ingest_gate
+            .clone()
+            .acquire_owned()
+            .await
+            .map_err(|e| LibraryError::Worker(e.to_string()))
     }
 
     pub fn photo_dir(&self, id: &str) -> Result<PathBuf, LibraryError> {
@@ -52,10 +63,25 @@ impl Library {
         filename: String,
         options: PhotoOptions,
     ) -> Result<PhotoMeta, LibraryError> {
-        let this = self.clone();
-        task::spawn_blocking(move || this.add_sync(&bytes, &filename, options))
+        let permit = self.acquire_ingest().await?;
+        self.add_from_bytes_with_permit(permit, bytes, filename, options)
             .await
-            .map_err(|e| LibraryError::Worker(e.to_string()))?
+    }
+
+    pub async fn add_from_bytes_with_permit(
+        &self,
+        permit: OwnedSemaphorePermit,
+        bytes: Vec<u8>,
+        filename: String,
+        options: PhotoOptions,
+    ) -> Result<PhotoMeta, LibraryError> {
+        let this = self.clone();
+        task::spawn_blocking(move || {
+            let _permit = permit;
+            this.add_sync(&bytes, &filename, options)
+        })
+        .await
+        .map_err(|e| LibraryError::Worker(e.to_string()))?
     }
 
     fn add_sync(
@@ -117,6 +143,13 @@ impl Library {
             .into_iter()
             .find(|photo| photo.id == id)
             .ok_or_else(|| LibraryError::NotFound(id.to_owned()))
+    }
+
+    pub fn load_copy(&self, id: &str) -> Result<(PhotoMeta, RgbImage), LibraryError> {
+        let meta = self.get(id)?;
+        let path = self.file_path(id, "copy.jpg")?;
+        let image = image::open(path)?.to_rgb8();
+        Ok((meta, image))
     }
 
     pub fn remove(&self, id: &str) -> Result<(), LibraryError> {

@@ -18,7 +18,7 @@ The API card is a JSON DTO. It is intentionally separate from the renderer's Rus
 {"type":"message","text":"Good morning, love.","size":48,"font":"eb-garamond"}
 ```
 
-`size` is one of `30`, `48`, `64`, or `96` pixels. `font` is a stable font ID from `GET /api/fonts`; it may be omitted to use the saved default font. Message text is limited to 3,000 characters. Fixed-size messages keep the renderer's baseline layout and truncate overflow with `...`.
+`size` is one of `30`, `48`, `64`, or `96` pt. `font` is a stable font ID from `GET /api/fonts`; it may be omitted to use the saved default font. Message text is limited to 3,000 characters. Fixed-size messages keep the renderer's baseline layout and truncate overflow with `...`.
 
 ```json
 {"type":"quote","text":"Hold fast to dreams.","attribution":"A reader","font":"eb-garamond","align":"center"}
@@ -68,7 +68,7 @@ Returns current content and UI capabilities. No scheduler is implemented yet: `n
   "panel":{"name":"png","state":"ready","last_show_at":"2026-10-22T10:00:00Z","last_error":null,"shows_total":1,"last_refresh_duration_ms":14},
   "last_refresh_at":"2026-10-22T10:00:00Z","last_refresh_duration_ms":14,
   "quiet_hours_active":false,
-  "capabilities":{"scheduler":false,"google":false,"ai":false},
+  "capabilities":{"scheduler":false,"google":false,"ai":false},"sources":[],
   "quote_max_chars":2000,"message_max_chars":3000
 }
 ```

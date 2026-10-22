@@ -72,6 +72,14 @@ pub struct DisplayHandle {
     operation_active: Arc<AtomicBool>,
 }
 
+struct ActiveOperationGuard(Arc<AtomicBool>);
+
+impl Drop for ActiveOperationGuard {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::Release);
+    }
+}
+
 impl DisplayHandle {
     /// Run the panel factory on the owning thread and bound initialization wait.
     pub fn start<F>(
@@ -116,18 +124,16 @@ impl DisplayHandle {
                 }
                 info!(panel = %panel.name(), "display worker ready");
                 while let Some(command) = rx.blocking_recv() {
-                    if worker_status
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .state
-                        == DisplayState::Wedged
-                    {
+                    if !begin_operation(&worker_status) {
+                        let reply = match command {
+                            Command::Show(_, reply) | Command::Clear(reply) => reply,
+                        };
+                        let _ = reply.send(Err("display worker is wedged".to_owned()));
                         break;
                     }
                     let (reply, result) = match command {
                         Command::Show(frame, reply) => {
                             let start = Instant::now();
-                            set_busy(&worker_status);
                             let result = panel.show(&frame).and_then(|_| panel.sleep());
                             (
                                 reply,
@@ -138,7 +144,6 @@ impl DisplayHandle {
                         }
                         Command::Clear(reply) => {
                             let start = Instant::now();
-                            set_busy(&worker_status);
                             let result = panel.clear().and_then(|_| panel.sleep());
                             (
                                 reply,
@@ -148,41 +153,43 @@ impl DisplayHandle {
                             )
                         }
                     };
-                    let wedged = worker_status
+                    let outcome = {
+                        // Check and update under one lock. A timed-out caller sets Wedged;
+                        // a late panel completion must never turn that back into Idle.
+                        let mut state = worker_status
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner);
+                        match result {
+                            Ok(duration) if state.state != DisplayState::Wedged => {
+                                state.state = DisplayState::Idle;
+                                state.last_error = None;
+                                state.last_show_at = Some(Utc::now().to_rfc3339());
+                                state.last_refresh_duration_ms = Some(duration);
+                                state.shows_total += 1;
+                                Ok(duration)
+                            }
+                            Ok(_) => {
+                                Err("operation completed after timeout; display remains wedged"
+                                    .to_owned())
+                            }
+                            Err(err) => {
+                                let message = err.to_string();
+                                if state.state != DisplayState::Wedged {
+                                    state.state = DisplayState::Idle;
+                                    state.last_error = Some(message.clone());
+                                }
+                                Err(message)
+                            }
+                        }
+                    };
+                    let remains_wedged = worker_status
                         .lock()
                         .unwrap_or_else(std::sync::PoisonError::into_inner)
                         .state
                         == DisplayState::Wedged;
-                    match result {
-                        Ok(duration) if !wedged => {
-                            let mut state = worker_status
-                                .lock()
-                                .unwrap_or_else(std::sync::PoisonError::into_inner);
-                            state.state = DisplayState::Idle;
-                            state.last_error = None;
-                            state.last_show_at = Some(Utc::now().to_rfc3339());
-                            state.last_refresh_duration_ms = Some(duration);
-                            state.shows_total += 1;
-                            let _ = reply.send(Ok(duration));
-                        }
-                        Ok(_) => {
-                            let _ = reply.send(Err(
-                                "operation completed after timeout; display remains wedged"
-                                    .to_owned(),
-                            ));
-                            break;
-                        }
-                        Err(err) => {
-                            let message = err.to_string();
-                            let mut state = worker_status
-                                .lock()
-                                .unwrap_or_else(std::sync::PoisonError::into_inner);
-                            if !wedged {
-                                state.state = DisplayState::Idle;
-                                state.last_error = Some(message.clone());
-                            }
-                            let _ = reply.send(Err(message));
-                        }
+                    let _ = reply.send(outcome);
+                    if remains_wedged {
+                        break;
                     }
                 }
             })
@@ -239,14 +246,6 @@ impl DisplayHandle {
         &self,
         command: impl FnOnce(oneshot::Sender<Result<u64, String>>) -> Command,
     ) -> Result<u64, DisplayError> {
-        let status = self.status();
-        if status.state == DisplayState::Wedged {
-            return Err(DisplayError::Wedged(
-                status
-                    .last_error
-                    .unwrap_or_else(|| "unknown timeout".to_owned()),
-            ));
-        }
         if self
             .operation_active
             .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
@@ -254,10 +253,33 @@ impl DisplayHandle {
         {
             return Err(DisplayError::Busy);
         }
+        let _active = ActiveOperationGuard(self.operation_active.clone());
+        {
+            let mut status = self
+                .status
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            match status.state {
+                DisplayState::Wedged => {
+                    return Err(DisplayError::Wedged(
+                        status
+                            .last_error
+                            .clone()
+                            .unwrap_or_else(|| "unknown timeout".to_owned()),
+                    ))
+                }
+                DisplayState::Busy => return Err(DisplayError::Busy),
+                DisplayState::Idle => status.state = DisplayState::Busy,
+            }
+        }
         let (reply, rx) = oneshot::channel();
-        if self.tx.send(command(reply)).await.is_err() {
-            self.operation_active.store(false, Ordering::Release);
-            return Err(DisplayError::WorkerStopped);
+        match self.tx.try_send(command(reply)) {
+            Ok(()) => {}
+            Err(mpsc::error::TrySendError::Closed(_)) => {
+                set_idle_if_not_wedged(&self.status);
+                return Err(DisplayError::WorkerStopped);
+            }
+            Err(mpsc::error::TrySendError::Full(_)) => return Err(DisplayError::Busy),
         }
         let result = match tokio::time::timeout(self.timeout, rx).await {
             Ok(Ok(Ok(duration))) => Ok(duration),
@@ -281,7 +303,6 @@ impl DisplayHandle {
                 Err(DisplayError::Timeout(self.timeout))
             }
         };
-        self.operation_active.store(false, Ordering::Release);
         result
     }
 
@@ -293,11 +314,25 @@ impl DisplayHandle {
     }
 }
 
-fn set_busy(status: &Mutex<DisplayStatus>) {
-    status
+fn begin_operation(status: &Mutex<DisplayStatus>) -> bool {
+    let mut state = status
         .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .state = DisplayState::Busy;
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if state.state == DisplayState::Wedged {
+        false
+    } else {
+        state.state = DisplayState::Busy;
+        true
+    }
+}
+
+fn set_idle_if_not_wedged(status: &Mutex<DisplayStatus>) {
+    let mut state = status
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if state.state != DisplayState::Wedged {
+        state.state = DisplayState::Idle;
+    }
 }
 
 #[cfg(test)]
@@ -344,6 +379,26 @@ mod tests {
         }
     }
 
+    struct DelayedPanel {
+        show_delay: Duration,
+    }
+
+    impl Panel for DelayedPanel {
+        fn show(&mut self, _: &Frame) -> Result<(), PanelError> {
+            thread::sleep(self.show_delay);
+            Ok(())
+        }
+        fn clear(&mut self) -> Result<(), PanelError> {
+            Ok(())
+        }
+        fn sleep(&mut self) -> Result<(), PanelError> {
+            Ok(())
+        }
+        fn name(&self) -> &'static str {
+            "delayed-test"
+        }
+    }
+
     #[tokio::test]
     async fn blocked_panel_times_out_and_rejects_subsequent_calls() {
         let handle = DisplayHandle::start(
@@ -360,6 +415,59 @@ mod tests {
         assert!(start.elapsed() >= Duration::from_millis(900));
         assert_eq!(handle.status().state, DisplayState::Wedged);
         assert!(matches!(handle.clear().await, Err(DisplayError::Wedged(_))));
+    }
+
+    #[tokio::test]
+    async fn late_panel_completion_never_clears_wedged_state() {
+        let handle = DisplayHandle::start(
+            || {
+                Ok(Box::new(DelayedPanel {
+                    show_delay: Duration::from_millis(200),
+                }) as Box<dyn Panel>)
+            },
+            Duration::from_secs(1),
+            Duration::from_millis(40),
+        )
+        .unwrap();
+        assert!(matches!(
+            handle.show(Frame::black()).await,
+            Err(DisplayError::Timeout(_))
+        ));
+        tokio::time::sleep(Duration::from_millis(240)).await;
+        assert_eq!(handle.status().state, DisplayState::Wedged);
+        assert_eq!(handle.status().shows_total, 0);
+        assert!(matches!(handle.clear().await, Err(DisplayError::Wedged(_))));
+    }
+
+    #[tokio::test]
+    async fn cancelling_caller_keeps_worker_busy_until_completion_then_releases_gate() {
+        let handle = DisplayHandle::start(
+            || {
+                Ok(Box::new(DelayedPanel {
+                    show_delay: Duration::from_millis(200),
+                }) as Box<dyn Panel>)
+            },
+            Duration::from_secs(1),
+            Duration::from_secs(1),
+        )
+        .unwrap();
+        let task_handle = handle.clone();
+        let task = tokio::spawn(async move { task_handle.show(Frame::black()).await });
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while handle.status().state != DisplayState::Busy {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        task.abort();
+        let _ = task.await;
+        assert!(matches!(handle.clear().await, Err(DisplayError::Busy)));
+        tokio::time::sleep(Duration::from_millis(240)).await;
+        assert_eq!(handle.status().state, DisplayState::Idle);
+        assert_eq!(handle.status().shows_total, 1);
+        handle.clear().await.unwrap();
+        assert_eq!(handle.status().state, DisplayState::Idle);
     }
 
     #[test]

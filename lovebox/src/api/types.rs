@@ -100,31 +100,21 @@ pub struct Quote {
     pub in_rotation: bool,
 }
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum DisplayMode {
+    #[default]
     Pinned,
     Slideshow,
     Daily,
 }
 
-impl Default for DisplayMode {
-    fn default() -> Self {
-        Self::Pinned
-    }
-}
-
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum SlideshowOrder {
+    #[default]
     Shuffle,
     Upload,
-}
-
-impl Default for SlideshowOrder {
-    fn default() -> Self {
-        Self::Shuffle
-    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -227,6 +217,8 @@ pub struct State {
     pub now_showing: Option<ApiCard>,
     pub history: VecDeque<Shown>,
     pub frame_revision: u64,
+    #[serde(default, with = "optional_base64")]
+    pub current_frame_png: Option<Vec<u8>>,
     pub last_refresh_at: Option<String>,
     pub last_refresh_duration_ms: Option<u64>,
 }
@@ -241,6 +233,7 @@ impl Default for State {
             now_showing: None,
             history: VecDeque::new(),
             frame_revision: 0,
+            current_frame_png: None,
             last_refresh_at: None,
             last_refresh_duration_ms: None,
         }
@@ -251,12 +244,44 @@ impl State {
     pub const VERSION: u32 = 1;
     pub const HISTORY_CAP: usize = 500;
 
-    pub fn record_shown(&mut self, shown: Shown) {
+    pub fn record_shown(&mut self, shown: Shown, frame_png: Vec<u8>) {
         self.now_showing = Some(shown.card.clone());
         self.frame_revision = shown.frame_revision;
+        self.current_frame_png = Some(frame_png);
         self.last_refresh_at = Some(shown.shown_at.clone());
         self.last_refresh_duration_ms = Some(shown.duration_ms);
         self.history.push_front(shown);
         self.history.truncate(Self::HISTORY_CAP);
+    }
+}
+
+mod optional_base64 {
+    use base64::Engine;
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S>(value: &Option<Vec<u8>>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match value {
+            Some(bytes) => {
+                serializer.serialize_some(&base64::engine::general_purpose::STANDARD.encode(bytes))
+            }
+            None => serializer.serialize_none(),
+        }
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<Vec<u8>>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let encoded = Option::<String>::deserialize(deserializer)?;
+        encoded
+            .map(|value| {
+                base64::engine::general_purpose::STANDARD
+                    .decode(value)
+                    .map_err(serde::de::Error::custom)
+            })
+            .transpose()
     }
 }
