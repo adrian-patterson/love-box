@@ -57,7 +57,7 @@ if [[ ! -e /etc/lovebox/config.toml ]]; then
     '# Secrets (API keys, tokens) go in /etc/lovebox/secrets.env, mode 0600 root:lovebox.' \
     'bind = "0.0.0.0:80"' \
     'data_dir = "/var/lib/lovebox"' \
-    'panel = "png"' \
+    'panel = "waveshare"' \
     'decode_limit_mb = 160' \
     'log = "info"' \
     > "$tmp"

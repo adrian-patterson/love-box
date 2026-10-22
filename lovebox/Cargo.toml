@@ -34,6 +34,15 @@ tower-http = { version = "0.6", features = ["cors", "trace"] }
 ulid = "1"
 ureq = { version = "2.12", default-features = false }
 
+[features]
+default = []
+hardware = ["dep:epd-waveshare", "dep:rppal"]
+
+[target.'cfg(all(target_os = "linux", target_arch = "arm"))'.dependencies]
+# Upstream exposes epd7in5_v2 unconditionally but its unrelated 2.13 module requires one LUT cfg.
+epd-waveshare = { git = "https://github.com/rust-embedded-community/epd-waveshare", rev = "48458e195662eab97d10e852893295ee0876ba74", optional = true, default-features = false, features = ["epd2in13_v3"] }
+rppal = { version = "0.22.1", optional = true, features = ["embedded-hal"] }
+
 [dev-dependencies]
 http-body-util = "0.1"
 tempfile = "3"

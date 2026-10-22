@@ -16,7 +16,7 @@ use lovebox::display::DisplayHandle;
 use lovebox::fonts::{Fonts, DEFAULT_FONT};
 use lovebox::import;
 use lovebox::library::Library;
-use lovebox::panel::{Panel, PanelError, PngPanel};
+use lovebox::panel::{create_waveshare_panel, Panel, PngPanel};
 use lovebox::render::{
     self, photo, Align, Card, Dither, IngestLimits, MessageSize, PhotoSpec, QuoteSpec, RenderError,
 };
@@ -386,11 +386,9 @@ async fn run(args: &ServeArgs) -> io::Result<()> {
     let display = DisplayHandle::start(
         move || match panel_kind {
             PanelKind::Png => Ok(Box::new(PngPanel::new(panel_dir)) as Box<dyn Panel>),
-            PanelKind::Waveshare => Err(PanelError::Device(
-                "waveshare support is not built into this binary".to_owned(),
-            )),
+            PanelKind::Waveshare => create_waveshare_panel(),
         },
-        Duration::from_secs(10),
+        Duration::from_secs(45),
         Duration::from_secs(45),
     )
     .map_err(|e| io::Error::other(e.to_string()))?;

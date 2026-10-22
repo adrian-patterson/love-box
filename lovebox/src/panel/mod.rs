@@ -5,8 +5,10 @@
 //! the panel on one dedicated thread with its own timeout around each call.
 
 mod png;
+mod waveshare;
 
 pub use self::png::PngPanel;
+pub use self::waveshare::create_waveshare_panel;
 
 use std::fmt;
 use std::time::Duration;

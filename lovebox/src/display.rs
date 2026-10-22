@@ -114,14 +114,22 @@ impl DisplayHandle {
                     }
                 };
                 let name = panel.name().to_owned();
-                let _ = init_tx.send(Ok(name.clone()));
-                {
+                let ready = {
                     let mut state = worker_status
                         .lock()
                         .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    state.name = name;
-                    state.state = DisplayState::Idle;
+                    if state.state == DisplayState::Wedged {
+                        false
+                    } else {
+                        state.name = name.clone();
+                        state.state = DisplayState::Idle;
+                        true
+                    }
+                };
+                if !ready {
+                    return;
                 }
+                let _ = init_tx.send(Ok(name.clone()));
                 info!(panel = %panel.name(), "display worker ready");
                 while let Some(command) = rx.blocking_recv() {
                     if !begin_operation(&worker_status) {
@@ -478,5 +486,20 @@ mod tests {
             Duration::from_secs(1),
         );
         assert!(matches!(result, Err(DisplayError::Initialization(_))));
+    }
+
+    #[test]
+    fn blocked_panel_constructor_times_out_without_blocking_caller() {
+        let started = Instant::now();
+        let result = DisplayHandle::start(
+            || {
+                thread::sleep(Duration::from_millis(150));
+                Ok(Box::new(PngPanel::new(std::env::temp_dir())) as Box<dyn Panel>)
+            },
+            Duration::from_millis(20),
+            Duration::from_secs(1),
+        );
+        assert!(matches!(result, Err(DisplayError::Timeout(_))));
+        assert!(started.elapsed() < Duration::from_millis(100));
     }
 }

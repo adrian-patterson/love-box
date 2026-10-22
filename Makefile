@@ -35,7 +35,7 @@ web-build:
 	cd web && $(NPM) ci && $(NPM) run build
 
 build-pi: web-build
-	cd $(CRATE) && cargo zigbuild --release --target $(PI_TARGET).$(PI_GLIBC)
+	cd $(CRATE) && cargo zigbuild --release --features hardware --target $(PI_TARGET).$(PI_GLIBC)
 	@ls -l $(PI_BIN)
 
 check-pi: build-pi
