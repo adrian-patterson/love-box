@@ -15,7 +15,8 @@ from the tree in October 2026 (git tag `legacy-2022` holds the last commit that 
 exists now: a Rust crate that cross-builds for the Pi, a deploy kit, and the complete renderer
 (frame, PNG panel, bundled fonts, message/quote/photo/clear cards, development CLI),
 and the local server/API with atomic JSON state, photo library and import.
-The embedded React web remote is complete; compile-only hardware support is next; [docs/PLAN.md](docs/PLAN.md) "Where things stand" says
+The embedded React web remote and compile-only Waveshare hardware support are complete;
+physical setup and on-panel validation remain pending; [docs/PLAN.md](docs/PLAN.md) "Where things stand" says
 what is done, parked, and next.
 The plan is in [docs/PLAN.md](docs/PLAN.md); durable decisions are in
 [docs/decisions/](docs/decisions/). Work on the next unfinished milestone there.
@@ -24,7 +25,7 @@ The plan is in [docs/PLAN.md](docs/PLAN.md); durable decisions are in
 
 | Path | What it is |
 |---|---|
-| `lovebox/` | The Rust crate: renderer, atomic state store, library, timed display worker, axum API and binary `lovebox`. `serve` serves local API/embedded React UI and exits on SIGTERM; `import` resizes photos before uploading. Later: panel driver and scheduler. |
+| `lovebox/` | The Rust crate: renderer, atomic state store, library, timed display worker, axum API and binary `lovebox`. `serve` serves local API/embedded React UI and exits on SIGTERM; `import` resizes photos before uploading. Waveshare V2 support is behind `hardware` on Linux ARM; the scheduler comes later. |
 | `web/` | Vite/React/TypeScript remote; built assets in `web/dist/` are embedded in the binary. `make web-build` rebuilds them. |
 | `lovebox/fonts/` | Bundled SIL OFL faces (EB Garamond, Libre Baskerville, Lora, Atkinson Hyperlegible), each with its `OFL.txt`; embedded with `include_bytes!`. |
 | `lovebox/tests/` | Integration tests; `golden.rs` compares rendered frames to `tests/golden/*.png` (regenerate with `UPDATE_GOLDENS=1`). |
@@ -79,7 +80,7 @@ to PATH itself.
 | `make lint` | `cargo fmt --check && cargo clippy --all-targets -- -D warnings` |
 | `make render-samples` | Render generated message, quote, photo and clear PNGs into `out/`. |
 | `make run` | `cargo run -- serve` natively |
-| `make build-pi` | `cargo zigbuild --release --target arm-unknown-linux-gnueabihf.2.36` → `lovebox/target/arm-unknown-linux-gnueabihf/release/lovebox` |
+| `make build-pi` | Builds web assets, then `cargo zigbuild --release --features hardware --target arm-unknown-linux-gnueabihf.2.36` → `lovebox/target/arm-unknown-linux-gnueabihf/release/lovebox` |
 | `make check-pi` | build-pi, then `deploy/check-pi.sh`: proves `Tag_CPU_arch: v6` with `readelf -A` and runs the binary under Docker emulation (see deploy/README.md for the Docker/binfmt setup) |
 | `make deploy [HOST=pi@lovebox.local]` | build, static ARMv6 check, ship, restart, verify active |
 | `make rollback` / `make backup` | swap `lovebox.prev` back / rsync `/var/lib/lovebox` to `~/lovebox-backup` |
@@ -96,7 +97,7 @@ go through `make build-pi`. Never target `armv7-*`: it segfaults on the Zero W.
   service must start and run without their keys.
 - **Hardware code runs only on the Pi.** Keep SPI/GPIO behind the `Panel` trait and the
   `hardware` Cargo feature so the crate builds and tests on macOS and Linux without it.
-  Add `--features hardware` to the Makefile's `build-pi` line when that feature exists.
+  The Makefile's `build-pi` enables `hardware`; native builds default to the PNG panel.
 - **No C dependencies without re-running `make check-pi`.** C code compiles through
   `zig cc`; the check catches an accidental ARMv7 object.
 - **Secrets never go in git.** OAuth client secrets, refresh tokens, and API keys live in

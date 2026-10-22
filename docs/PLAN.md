@@ -97,7 +97,8 @@ Work resumed under RESUME.handoff.01: finish the renderer, server, UI and compil
 - **Quote policy:** maximum 2,000 normalised characters; 40 px margins, 14 px floor. Layout overflow remains an explicit error, including unbreakable words.
 - **Server accepted:** U-301 at `fa57a76`: axum API, atomic JSON state, bounded photo library/import, preview/current PNG, local fonts, settings/quotes and timed display worker. Native tests/lint and ARMv6 build/static checks pass; HTTP smoke at `d8b9b19` remains applicable after the default-only lint repair. Attempt 01 ended at a usage limit; attempt 02 completed validation (D-012/D-013).
 - **Web UI accepted:** U-302 at `d7f2ca7`: local embedded React remote, all core screens, server PNG previews, library/settings/status. Native tests/lint and ARMv6 build/static checks pass; browser workflows, mobile/desktop light/dark, keyboard and 320 px/200% text checks pass. Bundle 82.62 kB gzip; D-014.
-- **Next:** U-202 compile-only Waveshare panel.
+- **Panel compile-only accepted:** U-202 at `652016a`: hardware feature, pinned Waveshare V2/RPPAL driver, clear-on-wake/full refresh/deep sleep and 45 s initialization/update bounds. Native/fake-driver tests, hardware-feature checks, ARM clippy/cross-build/static v6 pass; no C build dependencies. D-015.
+- **Resumption complete:** U-201, U-301, U-302 and U-202 compile-only accepted and integrated. Next actionable work is U-102/U-103 physical setup and on-panel M2/M3 acceptance; M4+ remains outside this scope.
 - **Blocked on hardware:** U-102 SD flash and U-103 first SSH/provision/deploy wait for the microSD adapter and power supply. No hardware validation or deployment has occurred.
 - **Backlog:** M4 Google Photos, M5 scheduler, M6 AI, M7 ops remain outside this resumption.
 
@@ -122,7 +123,7 @@ hello-world — blocked on U-102.
 - Acceptance: `ssh lovebox.local` works; `systemctl status lovebox` is active; journal shows
   the hello binary's log line.
 
-### M2 — Renderer and panel  *(U-201 accepted; U-202 compile/on-panel pending)*
+### M2 — Renderer and panel  *(software accepted; on-panel acceptance pending U-103)*
 - `lovebox` crate gains the `Panel` trait, `PngPanel`, and (U-202, compile-only until the Pi
   is up) `WavesharePanel`.
 - **Renderer** produces the 800x480 1-bit `Frame` for every card type:
@@ -150,7 +151,7 @@ hello-world — blocked on U-102.
   at the floor size and a 12-word quote renders large. (U-202, on the Pi, later): a photo
   and a 48 pt message appear on the panel, no hang, panel sleeps after.
 
-### M3 — Local web app replaces the old stack
+### M3 — Local web app replaces the old stack  *(software accepted; phone-to-panel acceptance pending U-103)*
 - axum server, JSON-document store (ADR-002), photo library with upload (multipart;
   JPEG/PNG/TIFF/WebP; iOS converts HEIC on upload), a `lovebox import` laptop CLI that
   resizes huge TIFF/JPEG files locally and POSTs them, card queue, pinned mode,
