@@ -38,7 +38,7 @@ with no cloud account.
 - **Boring to operate**: one-command deploy from your laptop, a systemd service, a health
   page, backups, and everything testable on a laptop without the hardware.
 
-Status (October 2026): the renderer is accepted: messages, auto-fitted quotes up to 2,000 characters, memory-budgeted photos, dithering, PNG output and development CLI. The toolchain, ARMv6 cross-build and deploy kit exist. The local server, web UI and compile-only panel driver are next; deployment and on-panel validation wait for hardware. Progress: [docs/PLAN.md](docs/PLAN.md).
+Status (October 2026): the renderer is accepted: messages, auto-fitted quotes up to 2,000 characters, memory-budgeted photos, dithering, PNG output and development CLI. The toolchain, ARMv6 cross-build and deploy kit exist. The local server/API, atomic state store, photo library and laptop import are accepted. The web UI and compile-only panel driver are next; deployment and on-panel validation wait for hardware. Progress: [docs/PLAN.md](docs/PLAN.md).
 
 ## Hardware
 
