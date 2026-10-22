@@ -47,6 +47,11 @@ impl Face {
         self.data.len()
     }
 
+    /// The bundled TrueType bytes, for serving the same face to the local web UI.
+    pub fn data(&self) -> &'static [u8] {
+        self.data
+    }
+
     /// The parsed font, for the renderer.
     pub fn font(&self) -> &FontRef<'static> {
         &self.font
