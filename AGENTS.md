@@ -15,7 +15,7 @@ from the tree in October 2026 (git tag `legacy-2022` holds the last commit that 
 exists now: a Rust crate that cross-builds for the Pi, a deploy kit, and the complete renderer
 (frame, PNG panel, bundled fonts, message/quote/photo/clear cards, development CLI),
 and the local server/API with atomic JSON state, photo library and import.
-Web UI and compile-only hardware support are next; [docs/PLAN.md](docs/PLAN.md) "Where things stand" says
+The embedded React web remote is complete; compile-only hardware support is next; [docs/PLAN.md](docs/PLAN.md) "Where things stand" says
 what is done, parked, and next.
 The plan is in [docs/PLAN.md](docs/PLAN.md); durable decisions are in
 [docs/decisions/](docs/decisions/). Work on the next unfinished milestone there.
@@ -24,7 +24,8 @@ The plan is in [docs/PLAN.md](docs/PLAN.md); durable decisions are in
 
 | Path | What it is |
 |---|---|
-| `lovebox/` | The Rust crate: renderer, atomic state store, library, timed display worker, axum API and binary `lovebox`. `serve` serves local API/embedded placeholder and exits on SIGTERM; `import` resizes photos before uploading. Later: web UI, panel driver, scheduler. |
+| `lovebox/` | The Rust crate: renderer, atomic state store, library, timed display worker, axum API and binary `lovebox`. `serve` serves local API/embedded React UI and exits on SIGTERM; `import` resizes photos before uploading. Later: panel driver and scheduler. |
+| `web/` | Vite/React/TypeScript remote; built assets in `web/dist/` are embedded in the binary. `make web-build` rebuilds them. |
 | `lovebox/fonts/` | Bundled SIL OFL faces (EB Garamond, Libre Baskerville, Lora, Atkinson Hyperlegible), each with its `OFL.txt`; embedded with `include_bytes!`. |
 | `lovebox/tests/` | Integration tests; `golden.rs` compares rendered frames to `tests/golden/*.png` (regenerate with `UPDATE_GOLDENS=1`). |
 | `lovebox/.cargo/config.toml` | Pi-target rustflags only (`target-cpu=arm1176jzf-s`). Nothing global. |

@@ -96,7 +96,8 @@ Work resumed under RESUME.handoff.01: finish the renderer, server, UI and compil
 - **Memory evidence:** macOS separate-process peak RSS: 40 MP baseline JPEG 48.4 MiB, 3000×2000 RGB16 TIFF 100 MiB with a 160 MiB decode budget. The budget estimates decode buffers, not total process RSS. Large progressive JPEGs may be rejected conservatively; use the laptop import path once available.
 - **Quote policy:** maximum 2,000 normalised characters; 40 px margins, 14 px floor. Layout overflow remains an explicit error, including unbreakable words.
 - **Server accepted:** U-301 at `fa57a76`: axum API, atomic JSON state, bounded photo library/import, preview/current PNG, local fonts, settings/quotes and timed display worker. Native tests/lint and ARMv6 build/static checks pass; HTTP smoke at `d8b9b19` remains applicable after the default-only lint repair. Attempt 01 ended at a usage limit; attempt 02 completed validation (D-012/D-013).
-- **Next:** U-302 web UI ([UI-DESIGN.md](UI-DESIGN.md)), then U-202 compile-only Waveshare panel.
+- **Web UI accepted:** U-302 at `d7f2ca7`: local embedded React remote, all core screens, server PNG previews, library/settings/status. Native tests/lint and ARMv6 build/static checks pass; browser workflows, mobile/desktop light/dark, keyboard and 320 px/200% text checks pass. Bundle 82.62 kB gzip; D-014.
+- **Next:** U-202 compile-only Waveshare panel.
 - **Blocked on hardware:** U-102 SD flash and U-103 first SSH/provision/deploy wait for the microSD adapter and power supply. No hardware validation or deployment has occurred.
 - **Backlog:** M4 Google Photos, M5 scheduler, M6 AI, M7 ops remain outside this resumption.
 
