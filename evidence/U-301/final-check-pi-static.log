@@ -1,0 +1,9 @@
+check-pi: binary lovebox/target/arm-unknown-linux-gnueabihf/release/lovebox (7851816 bytes)
+check-pi: (a) file: ELF 32-bit LSB pie executable, ARM, EABI5 version 1 (SYSV), dynamically linked, interpreter /lib/ld-linux-armhf.so.3, for GNU/Linux 2.0.0, stripped
+check-pi: (a) PASS
+check-pi: (b) /opt/homebrew/opt/binutils/bin/greadelf -A: Tag_CPU_arch: v6
+check-pi: (b)   Tag_CPU_name: "arm1176jzf-s"
+check-pi: (b)   Tag_FP_arch: VFPv2
+check-pi: (b) PASS (v6 is ARMv6)
+check-pi: info: highest glibc symbol version required: GLIBC_2.34
+check-pi: (c) skipped (--static-only)

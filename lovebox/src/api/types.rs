@@ -4,17 +4,12 @@ use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::render::{Align, Dither};
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub enum PatchField<T> {
+    #[default]
     Missing,
     Null,
     Value(T),
-}
-
-impl<T> Default for PatchField<T> {
-    fn default() -> Self {
-        Self::Missing
-    }
 }
 
 pub fn deserialize_patch_field<'de, D, T>(deserializer: D) -> Result<PatchField<T>, D::Error>

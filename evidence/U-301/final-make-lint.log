@@ -1,0 +1,3 @@
+cd lovebox && cargo fmt --check && cargo clippy --all-targets -- -D warnings
+    Checking lovebox v0.1.0 (/Users/adrian/love-box/lovebox)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.31s

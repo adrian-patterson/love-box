@@ -1,0 +1,136 @@
+cd lovebox && cargo test
+   Compiling lovebox v0.1.0 (/Users/adrian/love-box/lovebox)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.77s
+     Running unittests src/lib.rs (target/debug/deps/lovebox-36f2bbaa00c4b46f)
+
+running 55 tests
+test frame::tests::packed_length_is_48000 ... ok
+test frame::tests::known_pattern_packs_msb_first_white_is_one ... ok
+test import::tests::filenames_cannot_inject_multipart_headers ... ok
+test config::tests::command_line_log_overrides_both_environment_filters ... ok
+test frame::tests::white_and_black_constructors ... ok
+test frame::tests::set_get_round_trip ... ok
+test config::tests::command_line_flags_override_environment ... ok
+test display::tests::bad_panel_constructor_is_returned_as_bounded_initialization_error ... ok
+test fonts::tests::families_cover_classic_modern_serif_and_sans ... ok
+test fonts::tests::bundled_faces_parse_and_have_latin_glyphs ... ok
+test fonts::tests::lookup_ignores_case_and_separators ... ok
+test render::message::tests::sizes_carry_the_2022_values ... ok
+test render::message::tests::each_size_wraps_at_its_width_and_line_count_and_truncates_with_dots ... ok
+test render::photo::tests::bounded_size_preserves_aspect_and_never_upscales ... ok
+test render::photo::tests::cover_crop_trims_the_long_axis ... ok
+test frame::tests::png_round_trips_through_the_image_crate ... ok
+test render::photo::tests::focal_point_moves_the_crop_and_clamps_at_edges ... ok
+test render::message::tests::text_starts_at_x10_y0_and_stays_left ... ok
+test render::quote::tests::caller_can_lower_but_never_raise_the_character_cap ... ok
+test config::tests::environment_overrides_file ... ok
+test render::quote::tests::empty_quote_is_invalid ... ok
+test config::tests::file_values_are_used_when_env_and_flags_are_absent ... ok
+test frame::tests::from_gray_thresholds_at_50_percent ... ok
+test render::quote::tests::measure_capacity_at_the_floor ... ignored, measurement: run with --ignored --nocapture
+test render::quote::tests::over_max_chars_is_too_long_before_layout ... ok
+test render::quote::tests::twelve_words_render_large ... ok
+test render::quote::tests::one_unbreakable_word_is_too_long_not_a_panic ... ok
+test render::quote::tests::whitespace_collapses_and_paragraphs_survive ... ok
+test render::tests::clear_text_maps_to_clear_card_and_renders_white ... ok
+test render::tests::unknown_font_is_a_client_error ... ok
+test render::quote::tests::attribution_takes_space_and_is_right_aligned ... ok
+test render::text::tests::textwrap_matches_python ... ok
+test render::text::tests::wrap_px_rejects_a_word_wider_than_the_line ... ok
+test render::quote::tests::centre_alignment_centres_short_lines ... ok
+test render::text::tests::canvas_draws_ink_inside_the_text_box_only ... ok
+test render::dither::tests::mid_gray_is_a_fine_pattern_not_a_block ... ok
+test render::photo::tests::enhance_stretches_a_low_contrast_image ... ok
+test render::quote::tests::two_thousand_characters_fit_in_every_bundled_face ... ok
+test display::tests::png_panel_show_writes_frame_and_reports_idle ... ok
+test store::tests::corrupt_json_is_quarantined_and_fresh_state_starts ... ok
+test store::tests::future_state_version_is_rejected_without_quarantine ... ok
+test store::tests::create_update_reopen_round_trips_and_cleans_temp_file ... ok
+test store::tests::failed_atomic_replace_keeps_memory_unchanged_and_cleans_temp_file ... ok
+test panel::png::tests::clear_writes_a_white_frame_and_sleep_is_a_no_op ... ok
+test store::tests::history_is_capped_at_five_hundred ... ok
+test render::quote::tests::every_bundled_font_fits_a_short_and_a_long_quote ... ok
+test panel::png::tests::show_writes_frame_png_and_rotates_history_to_20 ... ok
+test render::dither::tests::extremes_stay_pure ... ok
+test display::tests::cancelling_caller_keeps_worker_busy_until_completion_then_releases_gate ... ok
+test library::tests::exif_datetime_original_is_parsed ... ok
+test display::tests::late_panel_completion_never_clears_wedged_state ... ok
+test library::tests::patch_focal_rebuilds_frame_and_delete_removes_directory ... ok
+test render::dither::tests::flat_grays_keep_their_tone ... ok
+test display::tests::blocked_panel_times_out_and_rejects_subsequent_calls ... ok
+test library::tests::add_writes_bounded_copy_thumb_and_rendered_frame ... ok
+
+test result: ok. 54 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 1.03s
+
+     Running unittests src/main.rs (target/debug/deps/lovebox-1df3460c3f21156e)
+
+running 3 tests
+test tests::startup_line_contains_version_and_target_triple ... ok
+test tests::cli_is_consistent ... ok
+test tests::no_subcommand_means_serve_with_300s_heartbeat ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/api.rs (target/debug/deps/api-ddc1b2f2675c83cd)
+
+running 2 tests
+test local_api_and_web_contract_round_trip ... ok
+test wedged_display_is_reported_by_health_and_refuses_more_mutations ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.01s
+
+     Running tests/cli.rs (target/debug/deps/cli-2045702a51e323bf)
+
+running 2 tests
+test fonts_and_client_errors_are_actionable ... ok
+test all_card_commands_render_and_quote_file_matches_inline ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.53s
+
+     Running tests/golden.rs (target/debug/deps/golden-b9f66225a1ebd920)
+
+running 6 tests
+test golden_clear ... ok
+test golden_quote_short_centred_with_attribution ... ok
+test golden_quote_long_left_with_paragraphs ... ok
+test golden_messages_one_per_size ... ok
+test golden_quote_in_each_bundled_font ... ok
+test golden_photos_both_dithers ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.10s
+
+     Running tests/import.rs (target/debug/deps/import-d582f907de12dd93)
+
+running 1 test
+test import_cli_bounds_large_jpeg_and_16_bit_tiff_before_upload ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.58s
+
+     Running tests/photo.rs (target/debug/deps/photo-1e27b740ce34d640)
+
+running 17 tests
+test oversized_jpeg_header_is_rejected_without_scan_data ... ok
+test over_80_megapixels_is_too_large_before_decoding ... ok
+test progressive_jpeg_reserves_full_resolution_coefficients_before_decoding ... ok
+test png_alpha_composites_on_white ... ok
+test webp_and_bmp_decode_losslessly ... ok
+test ingest_reads_files_and_rejects_garbage ... ok
+test truncated_jpeg_end_is_a_client_error ... ok
+test a_one_megabyte_limit_is_too_large_not_a_panic ... ok
+test bounded_copy_round_trips_through_jpeg ... ok
+test tiff_16_bit_matches_its_8_bit_twin ... ok
+test jpeg_orientation_is_applied_and_copy_stays_bounded ... ok
+test portrait_crops_top_and_bottom_landscape_crops_sides ... ok
+test focal_point_shifts_the_crop ... ok
+test photo_card_renders_through_render ... ok
+test both_dithers_keep_the_mean_within_5_percent ... ok
+test jpeg_24_megapixels_ingests_under_native_and_pi_limits ... ok
+test jpeg_40_megapixels_ingests_under_pi_limit ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.07s
+
+   Doc-tests lovebox
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
