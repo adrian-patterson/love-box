@@ -1,11 +1,11 @@
-//! Daily mode end to end: the scheduler check against a real store and the PNG panel.
+//! Daily and slideshow modes end to end: the scheduler check against a real store and the PNG panel.
 
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use chrono::{NaiveDate, NaiveDateTime};
-use lovebox::api::types::{ApiAlign, ApiCard, DisplayMode, Quote};
+use chrono::{DateTime, Local, NaiveDate, NaiveDateTime};
+use lovebox::api::types::{ApiAlign, ApiCard, DisplayMode, Quote, SlideshowOrder};
 use lovebox::api::AppState;
 use lovebox::config::{Config, PanelKind};
 use lovebox::display::DisplayHandle;
@@ -53,8 +53,11 @@ fn quote(text: &str, added_at: &str) -> Quote {
     }
 }
 
-fn at(date: &str, time: &str) -> NaiveDateTime {
-    NaiveDateTime::parse_from_str(&format!("{date} {time}"), "%Y-%m-%d %H:%M").unwrap()
+fn at(date: &str, time: &str) -> DateTime<Local> {
+    NaiveDateTime::parse_from_str(&format!("{date} {time}"), "%Y-%m-%d %H:%M")
+        .unwrap()
+        .and_local_timezone(Local)
+        .unwrap()
 }
 
 fn shown_text(card: &Tick) -> &str {
@@ -131,4 +134,102 @@ async fn pinned_mode_never_changes_the_frame() {
         .unwrap();
     assert_eq!(tick(&app, at("2026-10-27", "12:00")).await, Tick::Idle);
     assert_eq!(app.store.snapshot().frame_revision, 0);
+}
+
+fn slideshow(app: &AppState, interval_s: u64, quotes: &[&str]) {
+    app.store
+        .update(|state| {
+            state.settings.mode = DisplayMode::Slideshow;
+            state.settings.slideshow.interval_s = interval_s;
+            state.settings.slideshow.order = SlideshowOrder::Upload;
+            state.quotes = quotes
+                .iter()
+                .enumerate()
+                .map(|(i, text)| quote(text, &format!("2026-01-0{}T00:00:00Z", i + 1)))
+                .collect();
+            Ok(())
+        })
+        .unwrap();
+}
+
+// The slideshow times itself from `last_refresh_at`, which the show path stamps with the
+// real clock, so these checks run at offsets from the real now.
+#[tokio::test]
+async fn slideshow_changes_once_per_interval_in_order() {
+    let (_dir, app) = app();
+    slideshow(&app, 60, &["first", "second", "third"]);
+    let start = Local::now();
+    let seconds = |s| start + chrono::Duration::seconds(s);
+
+    // Nothing shown yet: the first card goes up straight away.
+    assert_eq!(shown_text(&tick(&app, start).await), "first");
+    assert_eq!(tick(&app, seconds(30)).await, Tick::Idle);
+    assert_eq!(shown_text(&tick(&app, seconds(61)).await), "second");
+    // Each show restarts the interval from its (real) time.
+    assert_eq!(tick(&app, seconds(59)).await, Tick::Idle);
+    // Long after (the Pi was off): one card, then a full interval before the next.
+    assert_eq!(shown_text(&tick(&app, seconds(3600)).await), "third");
+    assert_eq!(tick(&app, seconds(59)).await, Tick::Idle);
+    assert_eq!(app.store.snapshot().frame_revision, 3);
+}
+
+#[tokio::test]
+async fn a_card_sent_by_hand_stays_up_for_a_full_interval() {
+    let (_dir, app) = app();
+    slideshow(&app, 600, &["first", "second"]);
+    lovebox::api::show::show_card(
+        app.clone(),
+        ApiCard::Message {
+            text: "hello".into(),
+            size: 48,
+            font: None,
+        },
+    )
+    .await
+    .unwrap();
+    let start = Local::now();
+    assert_eq!(
+        tick(&app, start + chrono::Duration::seconds(300)).await,
+        Tick::Idle
+    );
+    assert_eq!(
+        shown_text(&tick(&app, start + chrono::Duration::seconds(601)).await),
+        "first"
+    );
+}
+
+#[tokio::test]
+async fn one_card_slideshow_does_not_redraw_and_empty_one_reports_it() {
+    let (_dir, app) = app();
+    slideshow(&app, 60, &[]);
+    let start = Local::now();
+    assert_eq!(tick(&app, start).await, Tick::NothingInRotation);
+
+    slideshow(&app, 60, &["only"]);
+    assert_eq!(shown_text(&tick(&app, start).await), "only");
+    assert_eq!(
+        tick(&app, start + chrono::Duration::seconds(120)).await,
+        Tick::Idle
+    );
+    assert_eq!(app.store.snapshot().frame_revision, 1);
+}
+
+#[tokio::test]
+async fn next_shows_the_following_card_only_in_slideshow_mode() {
+    use axum::extract::State;
+    let (_dir, app) = app();
+    let error = lovebox::api::show::next(State(app.clone()))
+        .await
+        .err()
+        .unwrap();
+    assert_eq!(error.code, "not_slideshow");
+
+    slideshow(&app, 900, &["first", "second"]);
+    let _ = lovebox::api::show::next(State(app.clone())).await.unwrap();
+    let _ = lovebox::api::show::next(State(app.clone())).await.unwrap();
+    let state = app.store.snapshot();
+    assert!(matches!(
+        state.now_showing,
+        Some(ApiCard::Quote { ref text, .. }) if text == "second"
+    ));
 }

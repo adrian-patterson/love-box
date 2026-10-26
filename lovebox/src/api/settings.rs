@@ -20,7 +20,7 @@ pub struct SettingsResponse {
 pub async fn get(State(app): State<Arc<AppState>>) -> Json<SettingsResponse> {
     Json(SettingsResponse {
         settings: app.store.snapshot().settings,
-        scheduler: "daily",
+        scheduler: "daily_slideshow",
         quote_max_chars: crate::render::QUOTE_MAX_CHARS,
     })
 }
@@ -48,7 +48,7 @@ pub async fn put(
     })?;
     Ok(Json(SettingsResponse {
         settings,
-        scheduler: "daily",
+        scheduler: "daily_slideshow",
         quote_max_chars: crate::render::QUOTE_MAX_CHARS,
     }))
 }

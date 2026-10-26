@@ -43,3 +43,7 @@ so the frame keeps working when the internet is down.
 - **Daily mode (26 October).** A new card each day at a set time, from the photos and
   saved quotes in rotation, least recently shown first. After a reboot it catches up once
   rather than replaying every missed day.
+- **Slideshow (26 October).** A new card every interval, shuffled or in order, with a
+  "Next" button on the Now screen. A card sent by hand stays up for a full interval, and
+  after a reboot the slideshow shows one card and carries on. The saved iPhone app's
+  header no longer sits under the status bar.

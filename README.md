@@ -39,10 +39,11 @@ The local web app works on a phone or desktop, in light and dark themes. These c
   frame in one of several open-licence fonts. Save quotes to a library.
 - **Photos**: upload from your phone; each one is cropped to the panel (drag and resize
   the crop box to choose what shows) and dithered to black and white.
-- **Modes**: pin one card until you change it, or Daily: a new photo or saved quote each
-  day at a time you choose, cycling through everything before repeating. Every change is
-  a full refresh: about 4 seconds, with a visible black-and-white flash.
-- **Planned** ([docs/PLAN.md](docs/PLAN.md)): a timed slideshow with quiet hours, photos
+- **Modes**: pin one card until you change it; Slideshow: a new photo or saved quote
+  every interval you choose (15 seconds to 24 hours), shuffled or in order; or Daily: a
+  new one each day at a time you choose. Both cycle through everything before repeating.
+  Every change is a full refresh: about 4 seconds, with a visible black-and-white flash.
+- **Planned** ([docs/PLAN.md](docs/PLAN.md)): quiet hours overnight, photos
   picked from Google Photos (through Google's Picker API), and optional AI-written daily
   notes and captions through the Claude API.
 - **Preview equals panel**: the page shows the exact 800x480 frame the e-paper will show.

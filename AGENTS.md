@@ -20,7 +20,7 @@ service built here; current status, what is done and what is next live in
 
 | Path | What it is |
 |---|---|
-| `lovebox/` | The Rust crate: renderer, atomic state store, library, timed display worker, axum API and binary `lovebox`. `serve` serves local API/embedded React UI and exits on SIGTERM; `import` resizes photos before uploading. Waveshare V2 support is behind `hardware` on Linux ARM; `scheduler` runs daily mode (slideshow and quiet hours come later). |
+| `lovebox/` | The Rust crate: renderer, atomic state store, library, timed display worker, axum API and binary `lovebox`. `serve` serves local API/embedded React UI and exits on SIGTERM; `import` resizes photos before uploading. Waveshare V2 support is behind `hardware` on Linux ARM; `scheduler` runs daily and slideshow modes (quiet hours come later). |
 | `web/` | Vite/React/TypeScript remote; built assets in `web/dist/` are embedded in the binary. `make web-build` rebuilds them. |
 | `lovebox/fonts/` | Bundled SIL OFL faces (EB Garamond, Libre Baskerville, Lora, Atkinson Hyperlegible), each with its `OFL.txt`; embedded with `include_bytes!`. |
 | `lovebox/tests/` | Integration tests; `golden.rs` compares rendered frames to `tests/golden/*.png` (regenerate with `UPDATE_GOLDENS=1`). |

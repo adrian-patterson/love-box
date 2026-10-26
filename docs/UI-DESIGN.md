@@ -90,8 +90,9 @@ the form side by side. Content width is capped at 560 px in single-column layout
   in EB Garamond, left-aligned").
 - **Caption** under it: what it is and why it is there ("Photo · slideshow, next in 12
   min", "Quote · pinned").
-- **Quick actions** as a row of secondary buttons: "Next" (only in slideshow mode),
-  "Pause slideshow" / "Resume", "Clear frame" (confirm).
+- **Quick actions** as a row of secondary buttons: "Next" (only in slideshow mode;
+  `POST /api/slideshow/next`), "Clear frame" (confirm). Pausing a slideshow is choosing
+  Pinned in Settings.
 - **Empty state** on a fresh install: "Nothing on the frame yet." with two buttons, "Write
   something" and "Add photos".
 - **Refresh moment**: when the frame finishes an update, the preview plays a short
@@ -205,8 +206,9 @@ Grouped sections, each a card with a heading.
   does not expose separate Photos and Quotes toggles.
 - **Quiet hours**: a switch, then "From" and "To" time inputs (`type="time"`). Helper:
   "No refreshes in this window; the frame keeps the last image."
-- The Slideshow and Quiet hours cards appear only when the server reports the scheduler
-  capability (M5); until then nothing acts on them, so they are hidden rather than shown as
+- The Slideshow card appears only when the server reports `capabilities.slideshow`, and
+  shows "Next card …" from `next_change_at` once saved. The Quiet hours card appears only
+  when it reports `capabilities.scheduler` (quiet hours, M5); until then nothing acts on them, so they are hidden rather than shown as
   working controls. The two time inputs share the row and shrink to fit at 320 px.
 - **Sources**: rows for Google Photos and AI notes. Each shows its state ("Not set up",
   "Connected", "Token expired") with a link to the setup section of the docs. Rows for

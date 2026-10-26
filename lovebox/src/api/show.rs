@@ -11,7 +11,7 @@ use serde::Serialize;
 use super::cards::render_card;
 use super::common::{now, ApiJson};
 use super::error::ApiError;
-use super::types::{ApiCard, Shown};
+use super::types::{ApiCard, DisplayMode, Shown};
 use super::AppState;
 
 #[derive(Serialize)]
@@ -30,6 +30,27 @@ pub async fn show(
 
 pub async fn clear(State(app): State<Arc<AppState>>) -> Result<Json<ShowResponse>, ApiError> {
     show_card(app, ApiCard::Clear).await.map(Json)
+}
+
+/// Shows the slideshow's next card now; the interval restarts from here.
+pub async fn next(State(app): State<Arc<AppState>>) -> Result<Json<ShowResponse>, ApiError> {
+    let state = app.store.snapshot();
+    if state.settings.mode != DisplayMode::Slideshow {
+        return Err(ApiError::new(
+            StatusCode::CONFLICT,
+            "not_slideshow",
+            "The frame is not in slideshow mode.",
+        ));
+    }
+    let roll = chrono::Utc::now().timestamp_subsec_nanos() as usize;
+    let card = crate::scheduler::next_slideshow_card(&state, roll).ok_or_else(|| {
+        ApiError::new(
+            StatusCode::CONFLICT,
+            "nothing_in_rotation",
+            "Nothing is marked “In slideshow” yet.",
+        )
+    })?;
+    show_card(app, card).await.map(Json)
 }
 
 /// Renders `card`, shows it on the panel and records it. Shared by the show endpoints and

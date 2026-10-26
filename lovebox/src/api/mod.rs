@@ -65,6 +65,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/state", get(health::state))
         .route("/show", post(show::show))
         .route("/clear", post(show::clear))
+        .route("/slideshow/next", post(show::next))
         .route("/preview", post(preview::preview))
         .route("/fonts", get(health::fonts))
         .route("/frame/current.png", get(show::current_frame))
