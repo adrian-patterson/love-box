@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # deploy/provision.sh UNIT_FILE
 #
-# UNTESTED as of U-101; first run is U-103.
+# First run on the Pi 2026-10-26 (U-103).
 #
 # Runs ON the Pi, as root, and is safe to re-run. Creates the service account and the
 # directory layout from docs/PI-SETUP.md §4, installs the systemd unit, and enables it.

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # deploy/deploy.sh [--rollback] [HOST]
 #
-# UNTESTED against a Pi as of U-101; first run is U-103.
+# First run against the Pi 2026-10-26 (U-103).
 #
 # Ships the lovebox binary to the Pi and restarts the service. HOST defaults to
 # pi@lovebox.local. Re-running it is safe.

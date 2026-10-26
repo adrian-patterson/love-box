@@ -21,19 +21,30 @@ sudo "/Applications/Raspberry Pi Imager.app/Contents/MacOS/rpi-imager" --cli \
   2026-10-06-raspios-trixie-armhf-lite.img.xz /dev/diskN
 ```
 
-`user-data` (`#cloud-config`): `hostname: lovebox`, `manage_etc_hosts: true`,
-`timezone: <your tz, e.g. Europe/London>`, `enable_ssh: true`, `ssh_pwauth: false`, user `pi` in the
-standard Pi groups (including `gpio`, `spi`) with `ssh_authorized_keys` =
-`~/.ssh/id_ed25519.pub`, a hashed console password, `sudo: ALL=(ALL) NOPASSWD:ALL`, and
-`rpi: { spi: true }` so SPI is enabled at first boot (no `raspi-config` step needed).
-`network-config`: netplan v2, `renderer: NetworkManager`, `wlan0` with `dhcp4`,
+`user-data` (`#cloud-config`) mirrors what Imager itself generates
+(`src/customization_generator.cpp` in raspberrypi/rpi-imager): `hostname: "lovebox"`,
+`manage_etc_hosts: true`, `packages: [avahi-daemon]`, `timezone: "<your tz, e.g. Europe/London>"`,
+singular `user:` (not `users:`, which drops the default user's `gpio`/`spi`/`sudo` groups)
+named `pi` with `lock_passwd: false`, a SHA-512 `passwd` hash (`openssl passwd -6`; the
+macOS system `openssl` lacks `-6`, use Homebrew's), `ssh_authorized_keys` =
+`~/.ssh/id_ed25519.pub` and `sudo: ALL=(ALL) NOPASSWD:ALL`; `ssh_pwauth: false`;
+`rpi: { interfaces: { spi: true } }` so SPI is enabled at first boot; and
+`runcmd: [[systemctl, enable, --now, ssh]]`, because Raspberry Pi OS ships sshd disabled and
+cloud-init has no `enable_ssh` key (it is silently ignored).
+`network-config`: netplan `version: 2`, `wifis.wlan0` with `dhcp4: true`,
 `optional: true`, `regulatory-domain: "<your ISO 3166 country code>"`, and your Wi-Fi
 SSID/password under `access-points`. The Zero W is 2.4 GHz only.
 
 Both files hold secrets (Wi-Fi password, password hash) and live in the session scratchpad,
-never in the repo. The device node comes from `diskutil list external physical` and is
-confirmed by a human before the write; the Mac's built-in SD reader needs a microSD-to-SD
-adapter. Source for the format: https://www.raspberrypi.com/news/cloud-init-on-raspberry-pi-os/
+never in the repo. The device node comes from `diskutil list` (the Mac's built-in SDXC reader
+reports the card as `internal, physical`, not external) and is confirmed by a human before
+the write; the built-in reader needs a microSD-to-SD adapter. Sources:
+https://www.raspberrypi.com/news/cloud-init-on-raspberry-pi-os/ and cloud-init's
+`cc_raspberry_pi` module docs.
+
+First boot takes about 13 minutes on a Zero W: `lovebox.local` resolves once cloud-init
+has installed avahi, and SSH answers only after its final stage runs the `runcmd`. If the
+name is not up yet, find the Pi by MAC prefix `b8:27:eb` (ping-sweep the subnet, then `arp -an`).
 
 ## 1. Reach it (read-only)
 
@@ -59,12 +70,18 @@ Verify after reboot: `ping lovebox.local` works from the Mac.
 
 ## 3. Hardening and maintenance (changes the Pi)
 
-- SSH: key-only. In `/etc/ssh/sshd_config.d/lovebox.conf`: `PasswordAuthentication no`.
-- `sudo apt install -y unattended-upgrades && sudo dpkg-reconfigure -plow unattended-upgrades`.
-- Hardware watchdog: `dtparam=watchdog=on` in `/boot/firmware/config.txt`, and
-  `RuntimeWatchdogSec=15` in `/etc/systemd/system.conf`, so a hung kernel reboots itself.
-- Keep the SD card alive: `sudo apt install -y log2ram` is optional; journald is capped by
-  `SystemMaxUse=50M` in `/etc/systemd/journald.conf`.
+Applied 2026-10-26 as drop-ins, so package upgrades never prompt over or replace them:
+
+- SSH: key-only. `/etc/ssh/sshd_config.d/lovebox.conf`: `PasswordAuthentication no`,
+  `KbdInteractiveAuthentication no`; check with `sshd -t`, then `systemctl reload ssh`.
+- `apt-get install -y unattended-upgrades` and `/etc/apt/apt.conf.d/20auto-upgrades` with
+  `APT::Periodic::Update-Package-Lists "1";` and `APT::Periodic::Unattended-Upgrade "1";`
+  (the non-interactive equivalent of `dpkg-reconfigure -plow unattended-upgrades`).
+- Hardware watchdog: `dtparam=watchdog=on` under `[all]` in `/boot/firmware/config.txt`, and
+  `RuntimeWatchdogSec=15` in `/etc/systemd/system.conf.d/lovebox-watchdog.conf`, so a hung
+  kernel reboots itself. Needs a reboot; check with `systemctl show -p RuntimeWatchdogUSec`.
+- Keep the SD card alive: `/etc/systemd/journald.conf.d/lovebox.conf` sets
+  `SystemMaxUse=50M` under `[Journal]`; `log2ram` is optional and not installed.
 
 ## 4. Service layout on the Pi
 

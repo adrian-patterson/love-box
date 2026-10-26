@@ -88,7 +88,7 @@ The 2022 Python/React/Firebase code was removed from the tree on 2026-10-21 (tag
 `legacy-2022` holds the last commit with it). Its rendering baseline is recorded in
 AGENTS.md; nothing else from it is needed.
 
-## Where things stand (2026-10-22)
+## Where things stand (2026-10-26)
 
 Work resumed under RESUME.handoff.01: finish the renderer, server, UI and compile-only panel support, one writer at a time. Stop before physical hardware access.
 
@@ -99,7 +99,8 @@ Work resumed under RESUME.handoff.01: finish the renderer, server, UI and compil
 - **Web UI accepted:** U-302 at `d7f2ca7`: local embedded React remote, all core screens, server PNG previews, library/settings/status. Native tests/lint and ARMv6 build/static checks pass; browser workflows, mobile/desktop light/dark, keyboard and 320 px/200% text checks pass. Bundle 82.62 kB gzip; D-014.
 - **Panel compile-only accepted:** U-202 at `652016a`: hardware feature, pinned Waveshare V2/RPPAL driver, clear-on-wake/full refresh/deep sleep and 45 s initialization/update bounds. Native/fake-driver tests, hardware-feature checks, ARM clippy/cross-build/static v6 pass; no C build dependencies. D-015.
 - **Resumption complete:** U-201, U-301, U-302 and U-202 compile-only accepted and integrated. Next actionable work is U-102/U-103 physical setup and on-panel M2/M3 acceptance; M4+ remains outside this scope.
-- **Blocked on hardware:** U-102 SD flash and U-103 first SSH/provision/deploy wait for the microSD adapter and power supply. No hardware validation or deployment has occurred.
+- **M1 accepted 2026-10-26:** U-102 flashed Raspberry Pi OS Lite 32-bit 2026-10-06 (Trixie) via Imager CLI and cloud-init; PI-SETUP §0 corrected (no `enable_ssh` key, `rpi.interfaces.spi`, singular `user:`). U-103: first boot ~13 min; Zero W Rev 1.1 confirmed, `spidev0.0` present, key-only SSH, passwordless sudo; full-upgrade, §3 hardening (15 s hardware watchdog, unattended-upgrades, journald 50M), `provision.sh` and `make deploy` all ran first time. `lovebox` at `5b3ef01` serves `/healthz` and the UI on `http://lovebox.local`, panel state `ready`, ~6.7 MB RSS, and restarts at boot.
+- **Next:** on-panel M2/M3 acceptance (U-202 on hardware): send a message, quote, photo and clear from the UI and confirm the panel, refresh time and deep sleep.
 - **Backlog:** M4 Google Photos, M5 scheduler, M6 AI, M7 ops remain outside this resumption.
 
 ## Milestones
@@ -111,12 +112,11 @@ One writer at a time; a reader only for named questions. Model policy (maintaine
 ### M0 — Context and plan accepted  ✅ 2026-10-21
 Deliverables: AGENTS.md, docs/, board, decisions D-001..D-003. Accepted by the maintainer.
 
-### M1 — Pi reachable, provisioned, and deployable  *(active)*
+### M1 — Pi reachable, provisioned, and deployable  ✅ 2026-10-26
 Units: U-101 Mac toolchain + `lovebox` crate skeleton + cross-build + deploy scripts —
-**accepted 2026-10-21 (D-004)**; U-102 flash SD card — prior ephemeral image/cloud-init files lost (regenerate per PI-SETUP §0),
-**blocked on hardware**: a microSD-to-SD adapter (or new card with adapter) and a micro-USB
-power supply are on order; U-103 first SSH, provision per docs/PI-SETUP.md, deploy
-hello-world — blocked on U-102.
+**accepted 2026-10-21 (D-004)**; U-102 flash SD card — **done 2026-10-26**; U-103 first SSH, provision per
+docs/PI-SETUP.md, deploy — **done 2026-10-26**, deploying the full `lovebox serve` binary
+rather than a hello-world.
 - SSH key access to the Pi; clean OS; SPI enabled; `lovebox.local` resolves.
 - Rust toolchain on the Mac (`rustup`), cross target installed, `deploy/deploy.sh` ships a
   hello-world binary and runs it under systemd.

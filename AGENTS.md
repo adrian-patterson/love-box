@@ -16,7 +16,8 @@ exists now: a Rust crate that cross-builds for the Pi, a deploy kit, and the com
 (frame, PNG panel, bundled fonts, message/quote/photo/clear cards, development CLI),
 and the local server/API with atomic JSON state, photo library and import.
 The embedded React web remote and compile-only Waveshare hardware support are complete;
-physical setup and on-panel validation remain pending; [docs/PLAN.md](docs/PLAN.md) "Where things stand" says
+the Pi is flashed, provisioned and running the service (M1, 2026-10-26); on-panel
+validation remains pending; [docs/PLAN.md](docs/PLAN.md) "Where things stand" says
 what is done, parked, and next.
 The plan is in [docs/PLAN.md](docs/PLAN.md); durable decisions are in
 [docs/decisions/](docs/decisions/). Work on the next unfinished milestone there.

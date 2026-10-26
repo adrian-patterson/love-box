@@ -1,6 +1,6 @@
 # /etc/systemd/system/lovebox.service, installed by deploy/provision.sh.
-# Behaviour and paths: docs/PI-SETUP.md §4. UNVERIFIED as of U-101 (no systemd-analyze
-# on macOS); first `systemd-analyze verify` and first start are U-103.
+# Behaviour and paths: docs/PI-SETUP.md §4. `systemd-analyze verify` clean and first start
+# on the Pi 2026-10-26 (U-103).
 [Unit]
 Description=lovebox e-paper picture frame
 Documentation=https://github.com/adrian-patterson/love-box
