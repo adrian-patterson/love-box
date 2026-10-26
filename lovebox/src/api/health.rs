@@ -105,13 +105,21 @@ pub async fn state(State(app): State<Arc<AppState>>) -> Json<serde_json::Value> 
     };
     let reason = match state.settings.mode {
         crate::api::types::DisplayMode::Pinned => "pinned",
-        _ => "scheduler_not_implemented",
+        crate::api::types::DisplayMode::Daily => "daily",
+        crate::api::types::DisplayMode::Slideshow => "scheduler_not_implemented",
     };
+    let next_change_at = crate::scheduler::next_daily_at(
+        &state.settings,
+        state.last_daily_on,
+        chrono::Local::now().naive_local(),
+    )
+    .and_then(|at| at.and_local_timezone(chrono::Local).earliest())
+    .map(|at| at.to_rfc3339());
     Json(serde_json::json!({
         "now_showing": state.now_showing,
         "mode": state.settings.mode,
         "reason": reason,
-        "next_change_at": null,
+        "next_change_at": next_change_at,
         "current_frame_url": frame_url,
         "frame_revision": state.frame_revision,
         "settings": state.settings,
@@ -119,7 +127,7 @@ pub async fn state(State(app): State<Arc<AppState>>) -> Json<serde_json::Value> 
         "last_refresh_at": state.last_refresh_at,
         "last_refresh_duration_ms": state.last_refresh_duration_ms,
         "quiet_hours_active": false,
-        "capabilities": {"scheduler":false,"google":false,"ai":false},
+        "capabilities": {"scheduler":false,"daily":true,"google":false,"ai":false},
         "sources": [],
         "quote_max_chars": QUOTE_MAX_CHARS,
         "message_max_chars": 3000,

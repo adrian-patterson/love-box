@@ -100,6 +100,7 @@ async fn local_api_and_web_contract_round_trip() {
     let state = json(response).await;
     assert_eq!(state["mode"], "pinned");
     assert_eq!(state["capabilities"]["scheduler"], false);
+    assert_eq!(state["capabilities"]["daily"], true);
     assert_eq!(state["next_change_at"], serde_json::Value::Null);
 
     let response = request(&app, Method::GET, "/api/fonts", None, vec![]).await;
@@ -500,7 +501,8 @@ async fn local_api_and_web_contract_round_trip() {
     .await;
     assert_eq!(response.status(), StatusCode::OK);
     let saved = json(response).await;
-    assert_eq!(saved["scheduler"], "not implemented");
+    assert_eq!(saved["scheduler"], "daily");
+    assert_eq!(saved["daily"]["time"], "07:00");
     assert_eq!(saved["mode"], "slideshow");
     let mut invalid_settings = settings;
     invalid_settings["slideshow"]["interval_s"] = serde_json::json!(10);

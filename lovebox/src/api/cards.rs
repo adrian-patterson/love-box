@@ -111,6 +111,7 @@ fn render_card_sync(
             let (meta, image) = library.load_copy(&id)?;
             let spec = PhotoSpec {
                 focal: meta.focal.as_ref().map(|p| (p.x, p.y)),
+                zoom: meta.zoom,
                 dither: meta.dither.into(),
                 enhance: meta.enhance,
             };

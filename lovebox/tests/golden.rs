@@ -146,6 +146,7 @@ fn golden_photos_both_dithers() {
                 &PhotoSpec {
                     dither,
                     focal: None,
+                    zoom: 1.0,
                     enhance: true,
                 },
             ),

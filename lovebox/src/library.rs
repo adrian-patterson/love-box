@@ -115,6 +115,7 @@ impl Library {
                 height,
                 source_id: options.source_id,
                 focal: options.focal,
+                zoom: 1.0,
                 dither: options.dither,
                 enhance: options.enhance.unwrap_or(true),
                 shown_count: 0,
@@ -143,6 +144,29 @@ impl Library {
             .into_iter()
             .find(|photo| photo.id == id)
             .ok_or_else(|| LibraryError::NotFound(id.to_owned()))
+    }
+
+    /// Rebuilds every thumbnail whose shape does not match its photo, from the stored
+    /// copy. Returns how many were rebuilt. Blocking; run once at startup.
+    pub fn repair_thumbnails(&self) -> Result<usize, LibraryError> {
+        let mut repaired = 0;
+        for meta in self.store.snapshot().photos {
+            let dir = self.photo_dir(&meta.id)?;
+            let thumb_path = dir.join("thumb.jpg");
+            let misshapen = match image::image_dimensions(&thumb_path) {
+                Ok((w, h)) => thumbnail_misshapen(meta.width, meta.height, w, h),
+                Err(_) => true,
+            };
+            if !misshapen {
+                continue;
+            }
+            let copy = image::open(dir.join("copy.jpg"))?.to_rgb8();
+            let staged = dir.join("thumb.jpg.new");
+            std::fs::write(&staged, photo::encode_jpeg(&thumbnail(&copy), 84)?)?;
+            std::fs::rename(&staged, &thumb_path)?;
+            repaired += 1;
+        }
+        Ok(repaired)
     }
 
     pub fn load_copy(&self, id: &str) -> Result<(PhotoMeta, RgbImage), LibraryError> {
@@ -208,6 +232,9 @@ impl Library {
         if let Some(Some(focal)) = &patch.focal {
             validate_focal(focal)?;
         }
+        if let Some(zoom) = patch.zoom {
+            validate_zoom(zoom)?;
+        }
         let old = self.get(id)?;
         let mut updated = old.clone();
         if let Some(caption) = patch.caption {
@@ -215,6 +242,9 @@ impl Library {
         }
         if let Some(focal) = patch.focal {
             updated.focal = focal;
+        }
+        if let Some(zoom) = patch.zoom {
+            updated.zoom = zoom;
         }
         if let Some(dither) = patch.dither {
             updated.dither = dither;
@@ -229,6 +259,7 @@ impl Library {
         let copy = image::open(dir.join("copy.jpg"))?.to_rgb8();
         let spec = PhotoSpec {
             focal: updated.focal.as_ref().map(|p| (p.x, p.y)),
+            zoom: updated.zoom,
             dither: Dither::from(updated.dither),
             enhance: updated.enhance,
         };
@@ -268,6 +299,7 @@ impl Library {
 pub struct PhotoPatch {
     pub caption: Option<Option<String>>,
     pub focal: Option<Option<FocalPoint>>,
+    pub zoom: Option<f32>,
     pub dither: Option<DitherChoice>,
     pub enhance: Option<bool>,
     pub in_rotation: Option<bool>,
@@ -323,6 +355,7 @@ impl From<StoreError> for LibraryError {
 fn photo_spec(options: &PhotoOptions) -> PhotoSpec {
     PhotoSpec {
         focal: options.focal.as_ref().map(|point| (point.x, point.y)),
+        zoom: 1.0,
         dither: Dither::from(options.dither),
         enhance: options.enhance.unwrap_or(true),
     }
@@ -338,6 +371,16 @@ fn validate_options(options: &PhotoOptions) -> Result<(), LibraryError> {
                 "caption must be at most 3,000 characters".to_owned(),
             ));
         }
+    }
+    Ok(())
+}
+
+fn validate_zoom(zoom: f32) -> Result<(), LibraryError> {
+    if !zoom.is_finite() || !(1.0..=photo::MAX_ZOOM).contains(&zoom) {
+        return Err(LibraryError::Invalid(format!(
+            "zoom must be a number in the range 1..={}",
+            photo::MAX_ZOOM
+        )));
     }
     Ok(())
 }
@@ -372,8 +415,24 @@ fn basename(filename: &str) -> String {
         .collect()
 }
 
+/// Longest side of a library thumbnail, in pixels.
+const THUMB_MAX_SIDE: u32 = 400;
+
+/// Scales `image` to fit in a `THUMB_MAX_SIDE` square, keeping its aspect ratio
+/// (`imageops::thumbnail` resizes to exactly the size it is given).
 fn thumbnail(image: &RgbImage) -> RgbImage {
-    image::imageops::thumbnail(image, 400, 960)
+    let (width, height) = image.dimensions();
+    let scale = (f64::from(THUMB_MAX_SIDE) / f64::from(width.max(height))).min(1.0);
+    let scaled = |side: u32| ((f64::from(side) * scale).round() as u32).max(1);
+    image::imageops::thumbnail(image, scaled(width), scaled(height))
+}
+
+/// True when a `thumb_w`x`thumb_h` thumbnail does not have the photo's aspect ratio
+/// (allowing for rounding), as thumbnails written before 2026-10-26 did not.
+fn thumbnail_misshapen(photo_w: u32, photo_h: u32, thumb_w: u32, thumb_h: u32) -> bool {
+    let photo = f64::from(photo_w) / f64::from(photo_h);
+    let thumb = f64::from(thumb_w) / f64::from(thumb_h);
+    (photo - thumb).abs() / photo > 0.02
 }
 
 fn exif_taken_at(bytes: &[u8]) -> Option<String> {
@@ -471,8 +530,84 @@ mod tests {
         assert!(photo_dir.join("thumb.jpg").is_file());
         assert!(photo_dir.join("frame.png").is_file());
         let thumb = image::open(photo_dir.join("thumb.jpg")).unwrap();
-        assert!(thumb.width() <= 400);
+        assert_eq!((thumb.width(), thumb.height()), (400, 240));
         assert_eq!((Frame::WIDTH, Frame::HEIGHT), (800, 480));
+    }
+
+    #[test]
+    fn thumbnails_keep_the_photo_aspect_ratio() {
+        let landscape = thumbnail(&RgbImage::new(1600, 960));
+        assert_eq!(landscape.dimensions(), (400, 240));
+        let portrait = thumbnail(&RgbImage::new(720, 960));
+        assert_eq!(portrait.dimensions(), (300, 400));
+        let small = thumbnail(&RgbImage::new(120, 80));
+        assert_eq!(small.dimensions(), (120, 80));
+    }
+
+    #[test]
+    fn repair_rebuilds_only_misshapen_thumbnails() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Arc::new(Store::open(dir.path()).unwrap());
+        let lib = Library::new(dir.path(), store, 160);
+        let meta = tokio_test_block_on(lib.add_from_bytes(
+            jpeg_bytes(2000, 1200),
+            "source.jpg".into(),
+            PhotoOptions::default(),
+        ))
+        .unwrap();
+        assert_eq!(lib.repair_thumbnails().unwrap(), 0);
+
+        // The pre-fix thumbnail: squashed to exactly 400x960.
+        let thumb_path = lib.photo_dir(&meta.id).unwrap().join("thumb.jpg");
+        let squashed = image::imageops::thumbnail(&RgbImage::new(1600, 960), 400, 960);
+        std::fs::write(&thumb_path, photo::encode_jpeg(&squashed, 84).unwrap()).unwrap();
+        assert_eq!(lib.repair_thumbnails().unwrap(), 1);
+        assert_eq!(image::image_dimensions(&thumb_path).unwrap(), (400, 240));
+        assert_eq!(lib.repair_thumbnails().unwrap(), 0);
+    }
+
+    #[test]
+    fn patch_zoom_rebuilds_frame_and_rejects_out_of_range() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Arc::new(Store::open(dir.path()).unwrap());
+        let lib = Library::new(dir.path(), store, 160);
+        let image: RgbImage = ImageBuffer::from_fn(1000, 600, |x, y| {
+            let v = if (x / 25 + y / 25) % 2 == 0 { 0 } else { 255 };
+            Rgb([v, v, v])
+        });
+        let bytes = photo::encode_jpeg(&image, 95).unwrap();
+        let meta = tokio_test_block_on(lib.add_from_bytes(
+            bytes,
+            "source.jpg".into(),
+            PhotoOptions::default(),
+        ))
+        .unwrap();
+        assert_eq!(meta.zoom, 1.0);
+        let frame_path = lib.photo_dir(&meta.id).unwrap().join("frame.png");
+        let before = std::fs::read(&frame_path).unwrap();
+        let zoomed = tokio_test_block_on(lib.patch(
+            meta.id.clone(),
+            PhotoPatch {
+                zoom: Some(2.0),
+                ..PhotoPatch::default()
+            },
+        ))
+        .unwrap();
+        assert_eq!(zoomed.zoom, 2.0);
+        assert_eq!(zoomed.crop().width, 500);
+        assert_ne!(before, std::fs::read(&frame_path).unwrap());
+        for bad in [0.5, photo::MAX_ZOOM + 0.1, f32::NAN] {
+            let error = tokio_test_block_on(lib.patch(
+                meta.id.clone(),
+                PhotoPatch {
+                    zoom: Some(bad),
+                    ..PhotoPatch::default()
+                },
+            ))
+            .unwrap_err();
+            assert!(matches!(error, LibraryError::Invalid(_)), "{bad}");
+        }
+        assert_eq!(lib.get(&meta.id).unwrap().zoom, 2.0);
     }
 
     #[test]

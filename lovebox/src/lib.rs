@@ -17,6 +17,7 @@ pub mod import;
 pub mod library;
 pub mod panel;
 pub mod render;
+pub mod scheduler;
 pub mod sources;
 pub mod store;
 pub mod web;

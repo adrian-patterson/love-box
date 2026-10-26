@@ -32,6 +32,7 @@ pub struct PhotoPatchRequest {
     pub caption: PatchField<String>,
     #[serde(default, deserialize_with = "super::types::deserialize_patch_field")]
     pub focal: PatchField<FocalPoint>,
+    pub zoom: Option<f32>,
     pub dither: Option<DitherChoice>,
     pub enhance: Option<bool>,
     pub in_rotation: Option<bool>,
@@ -240,6 +241,7 @@ pub async fn patch(
     let patch = PhotoPatch {
         caption,
         focal,
+        zoom: request.zoom,
         dither: request.dither,
         enhance: request.enhance,
         in_rotation: request.in_rotation,

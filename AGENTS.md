@@ -10,23 +10,17 @@ a Raspberry Pi Zero W (v1, ARMv6, 512 MB). A phone or laptop on the home network
 text message or picks a photo, and the panel updates. It is a gift, not a product: one
 frame, one household, no cloud account.
 
-Status: **rewrite in progress.** The 2022 Python/React/Firebase implementation was removed
-from the tree in October 2026 (git tag `legacy-2022` holds the last commit that has it). What
-exists now: a Rust crate that cross-builds for the Pi, a deploy kit, and the complete renderer
-(frame, PNG panel, bundled fonts, message/quote/photo/clear cards, development CLI),
-and the local server/API with atomic JSON state, photo library and import.
-The embedded React web remote and compile-only Waveshare hardware support are complete;
-the Pi is flashed, provisioned and running the service (M1, 2026-10-26); on-panel
-validation remains pending; [docs/PLAN.md](docs/PLAN.md) "Where things stand" says
-what is done, parked, and next.
-The plan is in [docs/PLAN.md](docs/PLAN.md); durable decisions are in
+The 2022 Python/React/Firebase implementation is gone from the tree (git tag `legacy-2022`
+keeps it); [HISTORY.md](HISTORY.md) summarises what changed since. The Pi runs the Rust
+service built here; current status, what is done and what is next live in
+[docs/PLAN.md](docs/PLAN.md) "Where things stand", and durable decisions in
 [docs/decisions/](docs/decisions/). Work on the next unfinished milestone there.
 
 ## Layout
 
 | Path | What it is |
 |---|---|
-| `lovebox/` | The Rust crate: renderer, atomic state store, library, timed display worker, axum API and binary `lovebox`. `serve` serves local API/embedded React UI and exits on SIGTERM; `import` resizes photos before uploading. Waveshare V2 support is behind `hardware` on Linux ARM; the scheduler comes later. |
+| `lovebox/` | The Rust crate: renderer, atomic state store, library, timed display worker, axum API and binary `lovebox`. `serve` serves local API/embedded React UI and exits on SIGTERM; `import` resizes photos before uploading. Waveshare V2 support is behind `hardware` on Linux ARM; `scheduler` runs daily mode (slideshow and quiet hours come later). |
 | `web/` | Vite/React/TypeScript remote; built assets in `web/dist/` are embedded in the binary. `make web-build` rebuilds them. |
 | `lovebox/fonts/` | Bundled SIL OFL faces (EB Garamond, Libre Baskerville, Lora, Atkinson Hyperlegible), each with its `OFL.txt`; embedded with `include_bytes!`. |
 | `lovebox/tests/` | Integration tests; `golden.rs` compares rendered frames to `tests/golden/*.png` (regenerate with `UPDATE_GOLDENS=1`). |
@@ -35,6 +29,7 @@ The plan is in [docs/PLAN.md](docs/PLAN.md); durable decisions are in
 | `Makefile` | Developer entry points; see Commands. |
 | `rust-toolchain.toml` | Stable toolchain, `arm-unknown-linux-gnueabihf` target. |
 | `docs/` | `PLAN.md` (spec and milestones), `UI-DESIGN.md` (web UI design contract), `PI-SETUP.md` (blank card to running Pi), `RESEARCH.md` (sourced findings), `decisions/` (ADRs). |
+| `HISTORY.md` | Human-readable summary of what changed and when; add a line when a milestone or notable fix lands. |
 
 ## Target architecture (summary; details in docs/PLAN.md)
 
@@ -56,9 +51,10 @@ One Rust binary, `lovebox`, on the Pi:
 
 ## Baseline the rewrite must preserve (from the 2022 version)
 
-- Panel is 800x480, 1-bit. Full refresh on every change (about 4 s); deep sleep between
-  updates; clear on wake to limit ghosting. Partial refresh is out of scope (the Rust driver
-  has none for this panel).
+- Panel is 800x480, 1-bit. One full refresh on every change (about 4 s); deep sleep
+  between updates. The 2022 white clear on wake was dropped 2026-10-26: the full refresh
+  already wipes ghosting, and the clear doubled the flashing. Partial refresh is out of
+  scope (the Rust driver has none for this panel).
 - Text sizes and wrap widths: 30 pt → 58 chars/line, 15 lines; 48 pt → 35/9; 64 pt → 26/7;
   96 pt → 16/5. Overflow truncates with `...`. Text starts at x=10, y=0. The 2022 font was
   Palatino (not open-licence); pick an SIL OFL serif (for example EB Garamond or Libre

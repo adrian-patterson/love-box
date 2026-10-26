@@ -100,6 +100,8 @@ Work resumed under RESUME.handoff.01: finish the renderer, server, UI and compil
 - **Panel compile-only accepted:** U-202 at `652016a`: hardware feature, pinned Waveshare V2/RPPAL driver, clear-on-wake/full refresh/deep sleep and 45 s initialization/update bounds. Native/fake-driver tests, hardware-feature checks, ARM clippy/cross-build/static v6 pass; no C build dependencies. D-015.
 - **Resumption complete:** U-201, U-301, U-302 and U-202 compile-only accepted and integrated. Next actionable work is U-102/U-103 physical setup and on-panel M2/M3 acceptance; M4+ remains outside this scope.
 - **M1 accepted 2026-10-26:** U-102 flashed Raspberry Pi OS Lite 32-bit 2026-10-06 (Trixie) via Imager CLI and cloud-init; PI-SETUP §0 corrected (no `enable_ssh` key, `rpi.interfaces.spi`, singular `user:`). U-103: first boot ~13 min; Zero W Rev 1.1 confirmed, `spidev0.0` present, key-only SSH, passwordless sudo; full-upgrade, §3 hardening (15 s hardware watchdog, unattended-upgrades, journald 50M), `provision.sh` and `make deploy` all ran first time. `lovebox` at `5b3ef01` serves `/healthz` and the UI on `http://lovebox.local`, panel state `ready`, ~6.7 MB RSS, and restarts at boot.
+- **First on-panel test 2026-10-26:** the panel works end to end. Fixed: inverted image (V2 wants 1 = black on the wire), squashed library thumbnails (rebuilt at startup), and UI issues from phone testing; added a crop box on the photo screen. The white pre-clear was dropped (one full refresh per update, about 3 flashes); watch for ghosting and add a periodic deep clean if it appears. Slideshow/Quiet hours settings are hidden until M5.
+- **Daily mode 2026-10-26:** the first M5 piece (see M5). Slideshow and quiet hours remain.
 - **Next:** on-panel M2/M3 acceptance (U-202 on hardware): send a message, quote, photo and clear from the UI and confirm the panel, refresh time and deep sleep.
 - **Backlog:** M4 Google Photos, M5 scheduler, M6 AI, M7 ops remain outside this resumption.
 
@@ -220,7 +222,12 @@ once, breaks whenever Google changes the page. Never the default path.
   document and
   survive restarts; the scheduler catches up sensibly after a reboot (shows the next item,
   does not burst through missed ones).
-- Daily mode (new card at a set time), quiet hours (no refresh in a nightly window; the
+- Daily mode (new card at a set time) — **done 2026-10-26**: `lovebox::scheduler` checks
+  every 30 s; once `settings.daily.time` (local) has passed and `state.last_daily_on` is
+  not today, it shows the least recently shown in-rotation photo or saved quote through
+  the normal show path. Catch-up after a reboot is one card; switching to Daily after
+  today's time waits until tomorrow; a failed update retries after 10 min.
+  `capabilities.daily` and `next_change_at` report it. Still to do: quiet hours (no refresh in a nightly window; the
   panel sleeps), a curated quotes list editable in the UI, quote render style (typographic
   layout, author line).
 - Acceptance: set "slideshow every 3 min" with 5 photos, observe 3 changes in 9 min in the
@@ -260,6 +267,6 @@ behind a config flag and a key in `/etc/lovebox/secrets.env`, and the frame work
 - **Google OAuth app lifecycle** (unverified apps, token expiry). Contained in M4 as a spike.
 - **ARMv6 toolchain friction** if staying on the Zero W. Mitigation: musl static target.
 - **Panel driver edge cases** (busy-wait with no timeout, wake-after-sleep ghosting).
-  Mitigation: our own timeout wrapper, clear-on-wake, hardware test in M2 before anything
+  Mitigation: our own timeout wrapper, a full refresh on every update, hardware test in M2 before anything
   else is built on it.
 - **SD card wear.** Mitigation: journald cap, few writes, backups.

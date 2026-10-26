@@ -20,7 +20,7 @@ pub struct SettingsResponse {
 pub async fn get(State(app): State<Arc<AppState>>) -> Json<SettingsResponse> {
     Json(SettingsResponse {
         settings: app.store.snapshot().settings,
-        scheduler: "not implemented",
+        scheduler: "daily",
         quote_max_chars: crate::render::QUOTE_MAX_CHARS,
     })
 }
@@ -36,13 +36,19 @@ pub async fn put(
             settings.default_font
         )));
     }
+    let now = chrono::Local::now().naive_local();
     app.store.update(|state| {
+        if let Some(day) =
+            crate::scheduler::last_daily_after_settings_change(&state.settings, &settings, now)
+        {
+            state.last_daily_on = Some(day);
+        }
         state.settings = settings.clone();
         Ok(())
     })?;
     Ok(Json(SettingsResponse {
         settings,
-        scheduler: "not implemented",
+        scheduler: "daily",
         quote_max_chars: crate::render::QUOTE_MAX_CHARS,
     }))
 }

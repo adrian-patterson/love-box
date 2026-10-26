@@ -119,21 +119,24 @@ The composer for notes and quotes. Top to bottom on a phone:
    Pasting a page of a book is a normal case, not an edge case: the field accepts it, the
    counter and preview handle it, and blank lines are kept as paragraph breaks.
 3. **Style**, always visible, not hidden in a menu:
-   - **Font**: a horizontal row of chips, one per bundled face, each showing "Aa" and its
-     name set in that face (fonts load lazily on first view). Selected chip has an ink
+   - **Font**: a wrapping grid of chips (min 128 px wide), one per bundled face, each
+     showing "Aa" in that face and its name, which wraps rather than overflowing (fonts
+     load lazily on first view). Selected chip has an ink
      border and a check icon.
    - **Size**: a segmented control, Auto · S · M · L · XL. Auto is the default and
      auto-fits the text (quote card, 14–120 px). S/M/L/XL are the four classic message
      sizes (30, 48, 64, 96 px), left-aligned, truncated with "…" when too long.
-   - **Alignment**: Left · Centre. Enabled for Auto only; with a fixed size it is shown
-     disabled with the note "Fixed sizes use the classic left-aligned layout."
+   - **Alignment**: Left · Centre, for Auto only. With a fixed size it is hidden (a
+     disabled control read as broken in testing) and the Size control carries the note
+     "Fixed sizes use the classic left-aligned layout."
    - **Attribution**: an optional single-line field, "Who said it", for Auto only, drawn
      under the text as "— name".
 4. **Actions**: primary "Show on frame" (full width), secondary "Save to library". When
    the draft came from a saved quote, "Save" updates it and "Save as new" copies it.
 
 Showing: the button becomes "Updating frame… about 4 s" with a spinner and stays disabled
-until the server confirms. Success is announced in an `aria-live` region and a toast, "On
+until the server confirms; it keeps full contrast while busy. The preview's "Fits at N px"
+badge appears only when it has something to say. Success is announced in an `aria-live` region and a toast, "On
 the frame", then the app moves to Now. A server error keeps the draft and shows the
 server's message under the button with a Retry.
 
@@ -160,9 +163,13 @@ A segmented switch at the top, **Photos · Quotes**, each its own route.
 - **Grid**: three columns on a phone, square colour thumbnails (the server's small copy,
   lazy-loaded, fixed aspect ratio so nothing shifts). A small ink badge marks photos in
   the slideshow. Long lists paginate or virtualise beyond 200 photos.
-- **Photo detail** (route `/library/photos/<id>`): the dithered frame preview at 5:3; tap
-  the original thumbnail to set the focal point used by the cover crop, with the preview
-  re-rendering; a Floyd–Steinberg / Atkinson choice labelled "Dither: Smooth / Crisp"; an
+- **Photo detail** (route `/library/photos/<id>`): the dithered frame preview at 5:3; the
+  original photo at its own aspect with the panel's 5:3 crop drawn as a box with corner
+  handles (outside dimmed; rectangle from the API's `crop`, so it matches the renderer).
+  Drag the box to move it, drag a corner to resize it (zoom 1–4×, opposite corner fixed,
+  5:3 kept), or press elsewhere to move it there and keep dragging; arrow keys move it
+  (Shift for bigger steps) and + / − zoom. On release the box centre becomes the focal
+  point and its size the zoom, and the preview re-renders; a Floyd–Steinberg / Atkinson choice labelled "Dither: Smooth / Crisp"; an
   "In slideshow" switch; "Show now"; "Delete".
 - **Select mode** for bulk actions: "Select" in the header, checkboxes on thumbnails, then
   "Add to slideshow", "Remove from slideshow", "Delete".
@@ -183,7 +190,11 @@ Grouped sections, each a card with a heading.
 
 - **Display mode**: three radio cards with one-line explanations. *Pinned*: "Keeps the
   current card until you change it." *Slideshow*: "Cycles through photos and quotes in
-  rotation." *Daily*: "A new card each morning." Modes the server does not support yet are
+  rotation." *Daily*: "A new card each day at a set time." When Daily is selected, a
+  "New card at" time input (default 07:00) and a helper explaining the choice (least
+  recently shown item marked "In slideshow") appear inside the card, ending "Next card
+  today/tomorrow at HH:MM" once saved. The Now screen appends "· Next card …" from
+  `next_change_at`. Modes the server does not support yet are
   shown disabled with "Coming soon".
 - **Slideshow**: interval as a select of presets (15 s, 30 s, 1 min, 2 min, 3 min, 5 min,
   15 min, 30 min, 1 h, 3 h, 6 h, 12 h, 24 h), default 15 min. Choosing anything under
@@ -194,6 +205,9 @@ Grouped sections, each a card with a heading.
   does not expose separate Photos and Quotes toggles.
 - **Quiet hours**: a switch, then "From" and "To" time inputs (`type="time"`). Helper:
   "No refreshes in this window; the frame keeps the last image."
+- The Slideshow and Quiet hours cards appear only when the server reports the scheduler
+  capability (M5); until then nothing acts on them, so they are hidden rather than shown as
+  working controls. The two time inputs share the row and shrink to fit at 320 px.
 - **Sources**: rows for Google Photos and AI notes. Each shows its state ("Not set up",
   "Connected", "Token expired") with a link to the setup section of the docs. Rows for
   features the server reports as unavailable are hidden, not broken.

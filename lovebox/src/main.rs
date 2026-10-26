@@ -209,6 +209,7 @@ fn render_command(args: RenderArgs) -> Result<(), RenderError> {
                     CliDither::Atkinson => Dither::Atkinson,
                 },
                 focal,
+                zoom: 1.0,
                 enhance: !no_enhance,
             };
             Card::Photo {
@@ -381,6 +382,11 @@ async fn run(args: &ServeArgs) -> io::Result<()> {
             .map_err(|e| io::Error::other(e.to_string()))?,
     );
     let library = Library::new(&config.data_dir, store.clone(), config.decode_limit_mb);
+    match library.repair_thumbnails() {
+        Ok(0) => {}
+        Ok(count) => info!(count, "rebuilt misshapen photo thumbnails"),
+        Err(e) => tracing::warn!(error = %e, "could not repair photo thumbnails"),
+    }
     let panel_dir = config.data_dir.join("panel");
     let panel_kind = config.panel;
     let display = DisplayHandle::start(
@@ -393,6 +399,7 @@ async fn run(args: &ServeArgs) -> io::Result<()> {
     )
     .map_err(|e| io::Error::other(e.to_string()))?;
     let state = std::sync::Arc::new(AppState::new(config.clone(), store, library, display));
+    let scheduler = lovebox::scheduler::spawn(state.clone());
     let app = api::router(state);
     let listener = TcpListener::bind(config.bind).await?;
 
@@ -420,6 +427,7 @@ async fn run(args: &ServeArgs) -> io::Result<()> {
     });
     let result = server.await;
     heartbeat.abort();
+    scheduler.abort();
     result
 }
 

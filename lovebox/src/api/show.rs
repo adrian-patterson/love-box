@@ -25,14 +25,16 @@ pub async fn show(
     State(app): State<Arc<AppState>>,
     ApiJson(card): ApiJson<ApiCard>,
 ) -> Result<Json<ShowResponse>, ApiError> {
-    show_card(app, card).await
+    show_card(app, card).await.map(Json)
 }
 
 pub async fn clear(State(app): State<Arc<AppState>>) -> Result<Json<ShowResponse>, ApiError> {
-    show_card(app, ApiCard::Clear).await
+    show_card(app, ApiCard::Clear).await.map(Json)
 }
 
-async fn show_card(app: Arc<AppState>, card: ApiCard) -> Result<Json<ShowResponse>, ApiError> {
+/// Renders `card`, shows it on the panel and records it. Shared by the show endpoints and
+/// the scheduler; fails with `panel_unavailable` while another update is in progress.
+pub async fn show_card(app: Arc<AppState>, card: ApiCard) -> Result<ShowResponse, ApiError> {
     let _permit = app.show_gate.clone().try_acquire_owned().map_err(|_| {
         ApiError::new(
             StatusCode::SERVICE_UNAVAILABLE,
@@ -87,11 +89,11 @@ async fn show_card(app: Arc<AppState>, card: ApiCard) -> Result<Json<ShowRespons
             format!("The panel updated, but saving its state failed: {error}. The actual panel may differ from the saved current card."),
         ));
     }
-    Ok(Json(ShowResponse {
+    Ok(ShowResponse {
         shown_at,
         frame_revision: revision,
         last_refresh_duration_ms: duration_ms,
-    }))
+    })
 }
 
 pub async fn current_frame(State(app): State<Arc<AppState>>) -> Result<Response, ApiError> {

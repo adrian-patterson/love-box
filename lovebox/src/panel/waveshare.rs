@@ -36,20 +36,20 @@ struct Lifecycle<D> {
 impl<D: Device> Lifecycle<D> {
     fn show(&mut self, frame: &Frame) -> Result<(), PanelError> {
         self.device.wake_up().map_err(device_error)?;
-        // Do not call epd-waveshare's clear_frame: its V2 implementation transmits 0x00,
-        // which is black in this panel's bit layout. Frame::white() packs 0xFF instead.
-        let white = Frame::white();
-        self.refresh(&white)?;
-        if frame == &white {
-            Ok(())
-        } else {
-            self.refresh(frame)
-        }
+        // One full refresh per update. Its waveform already wipes the previous image, so
+        // the 2022 white pre-clear only doubled the flashing (~6 flashes, ~8 s) on the
+        // first on-panel test; dropped 2026-10-26.
+        self.refresh(frame)
     }
 
     fn refresh(&mut self, frame: &Frame) -> Result<(), PanelError> {
+        // The V2 controller's new-data register (0x13) takes 1 = black, the inverse of
+        // Frame's 1 = white; Waveshare's own drivers send `~image` (EPD_7IN5_V2_Display in C,
+        // `buf[i] ^= 0xFF` in Python). epd-waveshare passes bytes through unchanged, which
+        // showed a negative on the first on-panel test (2026-10-26).
+        let wire: Vec<u8> = frame.as_packed_bytes().iter().map(|byte| !byte).collect();
         self.device
-            .update_and_refresh(frame.as_packed_bytes())
+            .update_and_refresh(&wire)
             .map_err(device_error)?;
         // Upstream display_frame sends DisplayRefresh and returns immediately. Wait here so
         // callers never report success or enter deep sleep before the full refresh is done.
@@ -251,7 +251,7 @@ mod tests {
     }
 
     #[test]
-    fn wake_clears_white_then_shows_frame_waits_and_sleeps() {
+    fn wake_shows_frame_with_one_refresh_waits_and_sleeps() {
         let events = Arc::new(Mutex::new(Vec::new()));
         let mut panel = Lifecycle {
             device: FakeDevice(events.clone()),
@@ -261,16 +261,19 @@ mod tests {
         panel.sleep().unwrap();
 
         let actual = events.lock().unwrap();
-        assert_eq!(actual[0], Event::Wake);
-        assert_eq!(actual[1], Event::Refresh(vec![0xFF; 48_000]));
-        assert_eq!(actual[2], Event::Wait);
-        assert_eq!(actual[3], Event::Refresh(vec![0x00; 48_000]));
-        assert_eq!(actual[4], Event::Wait);
-        assert_eq!(actual[5], Event::Sleep);
+        assert_eq!(
+            actual.as_slice(),
+            [
+                Event::Wake,
+                Event::Refresh(vec![0xFF; 48_000]),
+                Event::Wait,
+                Event::Sleep
+            ]
+        );
     }
 
     #[test]
-    fn frame_mapping_preserves_white_background_and_pixel_order() {
+    fn frame_mapping_inverts_bits_for_the_v2_wire_and_preserves_pixel_order() {
         let events = Arc::new(Mutex::new(Vec::new()));
         let mut panel = Lifecycle {
             device: FakeDevice(events.clone()),
@@ -283,13 +286,14 @@ mod tests {
         panel.show(&patterned).unwrap();
 
         let actual = events.lock().unwrap();
-        assert_eq!(actual[1], Event::Refresh(vec![0xFF; 48_000]));
-        let Event::Refresh(bytes) = &actual[3] else {
+        assert_eq!(actual.len(), 3);
+        let Event::Refresh(bytes) = &actual[1] else {
             panic!("expected show refresh")
         };
-        assert_eq!(bytes[0], 0x7E);
-        assert_eq!(bytes[1], 0x7F);
-        assert_eq!(bytes[47_999], 0xFE);
+        // Frame bytes 0x7E, 0x7F, 0xFE (1 = white) go out inverted (1 = black).
+        assert_eq!(bytes[0], 0x81);
+        assert_eq!(bytes[1], 0x80);
+        assert_eq!(bytes[47_999], 0x01);
         assert_eq!(bytes.len(), 48_000);
     }
 
@@ -303,7 +307,7 @@ mod tests {
         let actual = events.lock().unwrap();
         assert_eq!(
             actual.as_slice(),
-            [Event::Wake, Event::Refresh(vec![0xFF; 48_000]), Event::Wait]
+            [Event::Wake, Event::Refresh(vec![0x00; 48_000]), Event::Wait]
         );
     }
 

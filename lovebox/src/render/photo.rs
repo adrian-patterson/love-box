@@ -327,6 +327,9 @@ pub struct PhotoSpec {
     /// Point to keep in view when cropping, as fractions of width and height
     /// (`(0.5, 0.5)` = centre, the default). Values are clamped to `0.0..=1.0`.
     pub focal: Option<(f32, f32)>,
+    /// How far to zoom into the cover crop: `1.0` is the largest 5:3 crop (the default),
+    /// `2.0` half its width and height. Clamped to `1.0..=MAX_ZOOM`.
+    pub zoom: f32,
     /// Stretch contrast (clip 0.5% at each end of the histogram) and lift midtones with a
     /// mild gamma before dithering.
     pub enhance: bool,
@@ -338,10 +341,15 @@ impl Default for PhotoSpec {
         Self {
             dither: Dither::FloydSteinberg,
             focal: None,
+            zoom: 1.0,
             enhance: true,
         }
     }
 }
+
+/// Largest crop zoom: a quarter of the cover crop's width, which for a 1600 px library copy
+/// still leaves 400 source pixels across the 800 px panel.
+pub const MAX_ZOOM: f32 = 4.0;
 
 /// Gamma applied after the contrast stretch: `out = in^0.9`, so 50% gray becomes 54%.
 /// Dithered e-paper reads darker than the source; this lifts it a little.
@@ -352,8 +360,13 @@ pub const ENHANCE_CLIP: f64 = 0.005;
 /// The source rectangle `(x, y, width, height)` of a `w`x`h` image that cover-crops to
 /// the panel's 5:3 aspect, positioned so the focal point is as close to the centre as
 /// the image edges allow. Wider-than-5:3 sources lose their sides, taller ones their top
-/// and bottom.
-pub fn cover_crop_rect(w: u32, h: u32, focal: Option<(f32, f32)>) -> (u32, u32, u32, u32) {
+/// and bottom. `zoom` (clamped to `1.0..=MAX_ZOOM`) shrinks that crop about the same centre.
+pub fn cover_crop_rect(
+    w: u32,
+    h: u32,
+    focal: Option<(f32, f32)>,
+    zoom: f32,
+) -> (u32, u32, u32, u32) {
     let (fx, fy) = focal.unwrap_or((0.5, 0.5));
     let clamp01 = |v: f32| if v.is_nan() { 0.5 } else { v.clamp(0.0, 1.0) };
     let (fx, fy) = (clamp01(fx) as f64, clamp01(fy) as f64);
@@ -368,6 +381,13 @@ pub fn cover_crop_rect(w: u32, h: u32, focal: Option<(f32, f32)>) -> (u32, u32, 
             ((w as f64 * HEIGHT as f64 / WIDTH as f64).round() as u32).clamp(1, h),
         )
     };
+    let zoom = if zoom.is_nan() {
+        1.0
+    } else {
+        zoom.clamp(1.0, MAX_ZOOM)
+    } as f64;
+    let shrink = |side: u32| ((side as f64 / zoom).round() as u32).max(1);
+    let (cw, ch) = (shrink(cw), shrink(ch));
     let place = |size: u32, crop: u32, f: f64| -> u32 {
         let start = (f * size as f64 - crop as f64 / 2.0).round();
         start.clamp(0.0, (size - crop) as f64) as u32
@@ -382,7 +402,7 @@ pub fn prepare_gray(img: &RgbImage, spec: &PhotoSpec) -> GrayF32 {
     if img.width() == 0 || img.height() == 0 {
         return GrayF32::from_pixel(WIDTH, HEIGHT, Luma([1.0]));
     }
-    let (x, y, cw, ch) = cover_crop_rect(img.width(), img.height(), spec.focal);
+    let (x, y, cw, ch) = cover_crop_rect(img.width(), img.height(), spec.focal, spec.zoom);
     let luma = GrayF32::from_fn(cw, ch, |px, py| {
         let [r, g, b] = img.get_pixel(x + px, y + py).0;
         Luma([(0.2126 * r as f32 + 0.7152 * g as f32 + 0.0722 * b as f32) / 255.0])
@@ -459,37 +479,55 @@ mod tests {
     #[test]
     fn cover_crop_trims_the_long_axis() {
         // Portrait: full width, a 5:3 band from the middle.
-        assert_eq!(cover_crop_rect(600, 1000, None), (0, 320, 600, 360));
+        assert_eq!(cover_crop_rect(600, 1000, None, 1.0), (0, 320, 600, 360));
         // Landscape wider than 5:3: full height, sides trimmed.
-        assert_eq!(cover_crop_rect(2000, 600, None), (500, 0, 1000, 600));
+        assert_eq!(cover_crop_rect(2000, 600, None, 1.0), (500, 0, 1000, 600));
         // Exactly 5:3: untouched.
-        assert_eq!(cover_crop_rect(1600, 960, None), (0, 0, 1600, 960));
+        assert_eq!(cover_crop_rect(1600, 960, None, 1.0), (0, 0, 1600, 960));
+    }
+
+    #[test]
+    fn zoom_shrinks_the_crop_about_the_focal_point_and_clamps() {
+        // 1600x960 at zoom 2: an 800x480 crop centred on the default focal point.
+        assert_eq!(cover_crop_rect(1600, 960, None, 2.0), (400, 240, 800, 480));
+        // The focal point still steers it, clamped to the image.
+        assert_eq!(
+            cover_crop_rect(1600, 960, Some((1.0, 0.0)), 2.0),
+            (800, 0, 800, 480)
+        );
+        // Below 1, above MAX_ZOOM and NaN are clamped.
+        assert_eq!(cover_crop_rect(1600, 960, None, 0.5), (0, 0, 1600, 960));
+        assert_eq!(cover_crop_rect(1600, 960, None, 10.0), (600, 360, 400, 240));
+        assert_eq!(
+            cover_crop_rect(1600, 960, None, f32::NAN),
+            (0, 0, 1600, 960)
+        );
     }
 
     #[test]
     fn focal_point_moves_the_crop_and_clamps_at_edges() {
         assert_eq!(
-            cover_crop_rect(2000, 600, Some((0.0, 0.5))),
+            cover_crop_rect(2000, 600, Some((0.0, 0.5)), 1.0),
             (0, 0, 1000, 600)
         );
         assert_eq!(
-            cover_crop_rect(2000, 600, Some((1.0, 0.5))),
+            cover_crop_rect(2000, 600, Some((1.0, 0.5)), 1.0),
             (1000, 0, 1000, 600)
         );
         assert_eq!(
-            cover_crop_rect(2000, 600, Some((0.4, 0.5))),
+            cover_crop_rect(2000, 600, Some((0.4, 0.5)), 1.0),
             (300, 0, 1000, 600)
         );
         assert_eq!(
-            cover_crop_rect(600, 1000, Some((0.5, 0.0))),
+            cover_crop_rect(600, 1000, Some((0.5, 0.0)), 1.0),
             (0, 0, 600, 360)
         );
         assert_eq!(
-            cover_crop_rect(600, 1000, Some((0.5, 2.0))),
+            cover_crop_rect(600, 1000, Some((0.5, 2.0)), 1.0),
             (0, 640, 600, 360)
         );
         assert_eq!(
-            cover_crop_rect(600, 1000, Some((f32::NAN, 0.5))),
+            cover_crop_rect(600, 1000, Some((f32::NAN, 0.5)), 1.0),
             (0, 320, 600, 360)
         );
     }

@@ -183,6 +183,7 @@ fn spec(dither: Dither, focal: Option<(f32, f32)>, enhance: bool) -> PhotoSpec {
     PhotoSpec {
         dither,
         focal,
+        zoom: 1.0,
         enhance,
     }
 }
@@ -197,7 +198,7 @@ fn portrait_crops_top_and_bottom_landscape_crops_sides() {
             Rgb([0; 3])
         }
     });
-    assert_eq!(cover_crop_rect(600, 1000, None), (0, 320, 600, 360));
+    assert_eq!(cover_crop_rect(600, 1000, None, 1.0), (0, 320, 600, 360));
     let f = photo::frame(&portrait, &spec(Dither::FloydSteinberg, None, false));
     assert!(f.white_fraction() > 0.99, "{}", f.white_fraction());
 

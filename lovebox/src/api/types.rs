@@ -87,7 +87,9 @@ pub struct FocalPoint {
     pub y: f32,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+/// Serialized with a computed `crop` field (see the `Serialize` impl); deserializing
+/// ignores it, so it always reflects the current focal point.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct PhotoMeta {
     pub id: String,
     pub filename_original: String,
@@ -98,12 +100,69 @@ pub struct PhotoMeta {
     pub height: u32,
     pub source_id: Option<String>,
     pub focal: Option<FocalPoint>,
+    /// Crop zoom, `1.0..=MAX_ZOOM` (see `PhotoSpec::zoom`); absent in state written
+    /// before 2026-10-26, which means 1.0.
+    #[serde(default = "full_crop")]
+    pub zoom: f32,
     pub dither: DitherChoice,
     pub enhance: bool,
     pub shown_count: u64,
     pub last_shown_at: Option<String>,
     pub tags: Vec<String>,
     pub in_rotation: bool,
+}
+
+/// The part of the stored copy (`width`x`height` pixels) that the panel shows: the
+/// renderer's cover crop for the photo's focal point.
+#[derive(Clone, Copy, Debug, Serialize, PartialEq, Eq)]
+pub struct CropRect {
+    pub x: u32,
+    pub y: u32,
+    pub width: u32,
+    pub height: u32,
+}
+
+fn full_crop() -> f32 {
+    1.0
+}
+
+impl PhotoMeta {
+    pub fn crop(&self) -> CropRect {
+        let focal = self.focal.as_ref().map(|f| (f.x, f.y));
+        let (x, y, width, height) =
+            crate::render::photo::cover_crop_rect(self.width, self.height, focal, self.zoom);
+        CropRect {
+            x,
+            y,
+            width,
+            height,
+        }
+    }
+}
+
+impl Serialize for PhotoMeta {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStruct;
+        let mut s = serializer.serialize_struct("PhotoMeta", 17)?;
+        s.serialize_field("id", &self.id)?;
+        s.serialize_field("filename_original", &self.filename_original)?;
+        s.serialize_field("caption", &self.caption)?;
+        s.serialize_field("taken_at", &self.taken_at)?;
+        s.serialize_field("added_at", &self.added_at)?;
+        s.serialize_field("width", &self.width)?;
+        s.serialize_field("height", &self.height)?;
+        s.serialize_field("source_id", &self.source_id)?;
+        s.serialize_field("focal", &self.focal)?;
+        s.serialize_field("zoom", &self.zoom)?;
+        s.serialize_field("dither", &self.dither)?;
+        s.serialize_field("enhance", &self.enhance)?;
+        s.serialize_field("shown_count", &self.shown_count)?;
+        s.serialize_field("last_shown_at", &self.last_shown_at)?;
+        s.serialize_field("tags", &self.tags)?;
+        s.serialize_field("in_rotation", &self.in_rotation)?;
+        s.serialize_field("crop", &self.crop())?;
+        s.end()
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -170,6 +229,20 @@ impl Default for SlideshowSettings {
     }
 }
 
+/// Daily mode: one new card from the rotation each day at `time` (local, `HH:MM`).
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct DailySettings {
+    pub time: String,
+}
+
+impl Default for DailySettings {
+    fn default() -> Self {
+        Self {
+            time: "07:00".to_owned(),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Settings {
     pub default_font: String,
@@ -177,6 +250,9 @@ pub struct Settings {
     pub enhance: bool,
     pub quiet_hours: QuietHours,
     pub slideshow: SlideshowSettings,
+    /// Absent in state written before daily mode existed (2026-10-26).
+    #[serde(default)]
+    pub daily: DailySettings,
     pub mode: DisplayMode,
 }
 
@@ -188,6 +264,7 @@ impl Default for Settings {
             enhance: true,
             quiet_hours: QuietHours::default(),
             slideshow: SlideshowSettings::default(),
+            daily: DailySettings::default(),
             mode: DisplayMode::Pinned,
         }
     }
@@ -201,6 +278,7 @@ impl Settings {
         for (name, time) in [
             ("quiet_hours.start", &self.quiet_hours.start),
             ("quiet_hours.end", &self.quiet_hours.end),
+            ("daily.time", &self.daily.time),
         ] {
             let parsed = chrono::NaiveTime::parse_from_str(time, "%H:%M")
                 .map_err(|_| format!("{name} must be a time in HH:MM format"))?;
@@ -240,6 +318,9 @@ pub struct State {
     pub current_frame_png: Option<Vec<u8>>,
     pub last_refresh_at: Option<String>,
     pub last_refresh_duration_ms: Option<u64>,
+    /// Local date daily mode last showed (or skipped) its card; it shows at most one a day.
+    #[serde(default)]
+    pub last_daily_on: Option<chrono::NaiveDate>,
 }
 
 impl Default for State {
@@ -255,6 +336,7 @@ impl Default for State {
             current_frame_png: None,
             last_refresh_at: None,
             last_refresh_duration_ms: None,
+            last_daily_on: None,
         }
     }
 }
@@ -302,5 +384,77 @@ mod optional_base64 {
                     .map_err(serde::de::Error::custom)
             })
             .transpose()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn meta(width: u32, height: u32, focal: Option<FocalPoint>) -> PhotoMeta {
+        PhotoMeta {
+            id: "01J00000000000000000000000".into(),
+            filename_original: "a.jpg".into(),
+            caption: None,
+            taken_at: None,
+            added_at: "2026-10-26T00:00:00Z".into(),
+            width,
+            height,
+            source_id: None,
+            focal,
+            zoom: 1.0,
+            dither: DitherChoice::FloydSteinberg,
+            enhance: true,
+            shown_count: 0,
+            last_shown_at: None,
+            tags: Vec::new(),
+            in_rotation: true,
+        }
+    }
+
+    #[test]
+    fn photo_json_carries_the_renderer_crop_and_round_trips() {
+        // Portrait 720x960 keeps full width and a 432 px tall band; focal y=1 pins it low.
+        let photo = meta(720, 960, Some(FocalPoint { x: 0.5, y: 1.0 }));
+        let json = serde_json::to_value(&photo).unwrap();
+        assert_eq!(
+            json["crop"],
+            serde_json::json!({"x": 0, "y": 528, "width": 720, "height": 432})
+        );
+        let back: PhotoMeta = serde_json::from_value(json).unwrap();
+        assert_eq!(back, photo);
+    }
+
+    #[test]
+    fn zoom_shrinks_the_reported_crop_and_defaults_when_absent() {
+        let mut photo = meta(1600, 960, None);
+        photo.zoom = 2.0;
+        assert_eq!(
+            photo.crop(),
+            CropRect {
+                x: 400,
+                y: 240,
+                width: 800,
+                height: 480
+            }
+        );
+        let mut json = serde_json::to_value(&photo).unwrap();
+        json.as_object_mut().unwrap().remove("zoom");
+        let old: PhotoMeta = serde_json::from_value(json).unwrap();
+        assert_eq!(old.zoom, 1.0);
+    }
+
+    #[test]
+    fn crop_defaults_to_centre_without_a_focal_point() {
+        let crop = meta(2000, 960, None).crop();
+        assert_eq!(
+            crop,
+            CropRect {
+                x: 200,
+                y: 0,
+                width: 1600,
+                height: 960
+            }
+        );
     }
 }
