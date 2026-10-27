@@ -35,7 +35,6 @@ pub struct PhotoPatchRequest {
     pub zoom: Option<f32>,
     pub dither: Option<DitherChoice>,
     pub enhance: Option<bool>,
-    pub in_rotation: Option<bool>,
 }
 
 pub async fn list(
@@ -92,13 +91,7 @@ pub async fn upload(
         if name != "file"
             && !matches!(
                 name.as_str(),
-                "caption"
-                    | "focal_x"
-                    | "focal_y"
-                    | "dither"
-                    | "enhance"
-                    | "source_id"
-                    | "in_rotation"
+                "caption" | "focal_x" | "focal_y" | "dither" | "enhance" | "source_id"
             )
         {
             return Err(ApiError::bad(format!("unknown multipart field '{name}'")));
@@ -166,17 +159,12 @@ pub async fn upload(
         .map(|value| parse_bool(value, "enhance"))
         .transpose()?
         .unwrap_or(settings.enhance);
-    let in_rotation = fields
-        .get("in_rotation")
-        .map(|value| parse_bool(value, "in_rotation"))
-        .transpose()?;
     let options = PhotoOptions {
         caption: fields.remove("caption"),
         focal,
         dither,
         enhance: Some(enhance),
         source_id: fields.remove("source_id"),
-        in_rotation,
     };
     let meta = app
         .library
@@ -244,7 +232,6 @@ pub async fn patch(
         zoom: request.zoom,
         dither: request.dither,
         enhance: request.enhance,
-        in_rotation: request.in_rotation,
     };
     Ok(Json(app.library.patch(id, patch).await?))
 }

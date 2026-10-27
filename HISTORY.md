@@ -41,9 +41,14 @@ so the frame keeps working when the internet is down.
   Each update now does a single full refresh, with half the flashing of the 2022 clear
   plus redraw. The photo screen gained a crop box you can drag and resize to zoom.
 - **Daily mode (26 October).** A new card each day at a set time, from the photos and
-  saved quotes in rotation, least recently shown first. After a reboot it catches up once
+  saved quotes in the library, least recently shown first. After a reboot it catches up once
   rather than replaying every missed day.
 - **Slideshow (26 October).** A new card every interval, shuffled or in order, with a
-  "Next" button on the Now screen. A card sent by hand stays up for a full interval, and
-  after a reboot the slideshow shows one card and carries on. The saved iPhone app's
+  "Next" button on the Now screen. After a reboot the slideshow shows one card and
+  carries on. The saved iPhone app's
   header no longer sits under the status bar.
+- **Simpler modes (27 October).** After a day of use: a card you send by hand now stays
+  up (sending pauses the slideshow or daily card), and the Now screen says what happens
+  next with Start slideshow, Next and Pause. Settings save as you change them, with no
+  Save button. Every photo and saved quote in the library is in the slideshow, so the
+  per-item "In slideshow" switches and the add/remove bulk actions are gone.

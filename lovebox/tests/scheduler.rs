@@ -49,7 +49,6 @@ fn quote(text: &str, added_at: &str) -> Quote {
         added_at: added_at.into(),
         shown_count: 0,
         last_shown_at: None,
-        in_rotation: true,
     }
 }
 
@@ -174,10 +173,20 @@ async fn slideshow_changes_once_per_interval_in_order() {
 }
 
 #[tokio::test]
-async fn a_card_sent_by_hand_stays_up_for_a_full_interval() {
+async fn a_card_sent_by_hand_pins_it_but_refreshing_the_current_one_does_not() {
     let (_dir, app) = app();
-    slideshow(&app, 600, &["first", "second"]);
-    lovebox::api::show::show_card(
+    slideshow(&app, 60, &["first", "second"]);
+    let start = Local::now();
+    assert_eq!(shown_text(&tick(&app, start).await), "first");
+
+    // Refresh now re-shows the card already up: the slideshow carries on.
+    let current = app.store.snapshot().now_showing.unwrap();
+    lovebox::api::show::show_by_hand(app.clone(), current)
+        .await
+        .unwrap();
+    assert_eq!(app.store.snapshot().settings.mode, DisplayMode::Slideshow);
+
+    lovebox::api::show::show_by_hand(
         app.clone(),
         ApiCard::Message {
             text: "hello".into(),
@@ -187,14 +196,10 @@ async fn a_card_sent_by_hand_stays_up_for_a_full_interval() {
     )
     .await
     .unwrap();
-    let start = Local::now();
+    assert_eq!(app.store.snapshot().settings.mode, DisplayMode::Pinned);
     assert_eq!(
-        tick(&app, start + chrono::Duration::seconds(300)).await,
+        tick(&app, start + chrono::Duration::seconds(3600)).await,
         Tick::Idle
-    );
-    assert_eq!(
-        shown_text(&tick(&app, start + chrono::Duration::seconds(601)).await),
-        "first"
     );
 }
 

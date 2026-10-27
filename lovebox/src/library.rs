@@ -22,7 +22,6 @@ pub struct PhotoOptions {
     pub dither: DitherChoice,
     pub enhance: Option<bool>,
     pub source_id: Option<String>,
-    pub in_rotation: Option<bool>,
 }
 
 #[derive(Clone)]
@@ -121,7 +120,6 @@ impl Library {
                 shown_count: 0,
                 last_shown_at: None,
                 tags: Vec::new(),
-                in_rotation: options.in_rotation.unwrap_or(true),
             };
             self.store.update(|state| {
                 state.photos.push(meta.clone());
@@ -252,9 +250,6 @@ impl Library {
         if let Some(enhance) = patch.enhance {
             updated.enhance = enhance;
         }
-        if let Some(in_rotation) = patch.in_rotation {
-            updated.in_rotation = in_rotation;
-        }
         let dir = self.root.join(id);
         let copy = image::open(dir.join("copy.jpg"))?.to_rgb8();
         let spec = PhotoSpec {
@@ -302,7 +297,6 @@ pub struct PhotoPatch {
     pub zoom: Option<f32>,
     pub dither: Option<DitherChoice>,
     pub enhance: Option<bool>,
-    pub in_rotation: Option<bool>,
 }
 
 #[derive(Debug)]

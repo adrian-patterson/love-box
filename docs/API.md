@@ -73,21 +73,23 @@ Returns current content and UI capabilities. No scheduler is implemented yet: `n
 }
 ```
 
-`reason` is `pinned` for the supported mode. State also includes `queue`, an array of saved photo and quote IDs with each item's `in_rotation` flag, so the future scheduler's selection set is explicit.
+`reason` is `pinned` for the supported mode. State also includes `queue`, an array of saved photo and quote IDs. Every library item is in the slideshow and daily rotation; there is no per-item flag.
 
 ### `POST /api/show`
 
 Renders, displays, then records the card as `now_showing` and adds one history entry. Request body is one Card as above. Returns 200 only after the panel operation succeeds:
 
 ```json
-{"shown_at":"2026-10-22T10:00:00Z","frame_revision":3,"last_refresh_duration_ms":14}
+{"shown_at":"2026-10-22T10:00:00Z","frame_revision":3,"last_refresh_duration_ms":14,"paused":false}
 ```
+
+A card shown here is pinned: if the frame was in slideshow or daily mode, the mode becomes `pinned` and `paused` is `true`, so a timed change does not replace it. Re-showing the card already on the frame (Refresh now) leaves the mode alone.
 
 A missing photo returns 404. Invalid input returns 400. A wedged or unavailable panel returns 503 and leaves `now_showing` and the frame revision unchanged. If panel I/O succeeds but the following atomic state write fails, the request returns 500 and says the physical panel may differ from saved state; the frame endpoint and revision continue to represent the last persisted display state.
 
 ### `POST /api/clear`
 
-Clears the display and records a clear card. No request body is required. Response is the same as `POST /api/show`.
+Clears the display and records a clear card. No request body is required. Response and pinning are the same as `POST /api/show`.
 
 ### `GET /api/frame/current.png`
 
@@ -124,7 +126,7 @@ Returns the bundled TrueType font file with `font/ttf`. IDs are those returned b
   "id":"01J9R6J5W4HF0E2PQS0A1B2C3D","filename_original":"beach.jpg","caption":"Summer by the sea",
   "taken_at":null,"added_at":"2026-10-22T10:00:00Z","width":1600,"height":960,
   "source_id":null,"focal":{"x":0.5,"y":0.5},"dither":"floyd_steinberg","enhance":true,
-  "shown_count":0,"last_shown_at":null,"tags":[],"in_rotation":true
+  "shown_count":0,"last_shown_at":null,"tags":[]
 }
 ```
 
@@ -135,14 +137,14 @@ Returns the bundled TrueType font file with `font/ttf`. IDs are those returned b
 Returns newest first:
 
 ```json
-{"items":[{"id":"01J...","filename_original":"beach.jpg","caption":null,"taken_at":null,"added_at":"2026-10-22T10:00:00Z","width":1600,"height":960,"source_id":null,"focal":null,"dither":"floyd_steinberg","enhance":true,"shown_count":0,"last_shown_at":null,"tags":[],"in_rotation":true}],"total":1}
+{"items":[{"id":"01J...","filename_original":"beach.jpg","caption":null,"taken_at":null,"added_at":"2026-10-22T10:00:00Z","width":1600,"height":960,"source_id":null,"focal":null,"dither":"floyd_steinberg","enhance":true,"shown_count":0,"last_shown_at":null,"tags":[]}],"total":1}
 ```
 
 `offset` defaults to 0 and `limit` to 50 (maximum 200). Invalid pagination returns 400.
 
 ### `POST /api/photos`
 
-Accepts one `multipart/form-data` file per request. The request body is capped at 64 MiB. The required part is `file`; optional text parts are `caption`, `focal_x`, `focal_y`, `dither` (`floyd_steinberg` or `atkinson`), `enhance` (`true` or `false`), `source_id`, and `in_rotation`. If omitted, `dither` and `enhance` use the saved settings defaults. The server serializes image ingest so uploads wait before accumulating their multipart file bytes.
+Accepts one `multipart/form-data` file per request. The request body is capped at 64 MiB. The required part is `file`; optional text parts are `caption`, `focal_x`, `focal_y`, `dither` (`floyd_steinberg` or `atkinson`), `enhance` (`true` or `false`), and `source_id`. If omitted, `dither` and `enhance` use the saved settings defaults. The server serializes image ingest so uploads wait before accumulating their multipart file bytes.
 
 ```sh
 curl -F 'file=@beach.jpg' -F 'caption=Summer by the sea' http://lovebox.local/api/photos
@@ -168,10 +170,10 @@ Returns the dithered 800×480 preview for the photo with its saved render contro
 
 ### `PATCH /api/photos/{id}`
 
-Updates any supplied subset of `caption`, `focal`, `dither`, `enhance`, or `in_rotation`. Omit a field to leave it unchanged; send `null` for `caption` or `focal` to clear it. `focal` can also be `{ "x":0.5,"y":0.5 }` with each coordinate in 0..=1. Dither is `floyd_steinberg` or `atkinson`.
+Updates any supplied subset of `caption`, `focal`, `zoom`, `dither`, or `enhance`. Omit a field to leave it unchanged; send `null` for `caption` or `focal` to clear it. `focal` can also be `{ "x":0.5,"y":0.5 }` with each coordinate in 0..=1. Dither is `floyd_steinberg` or `atkinson`.
 
 ```json
-{"focal":{"x":0.7,"y":0.4},"dither":"atkinson","in_rotation":false}
+{"focal":{"x":0.7,"y":0.4},"dither":"atkinson"}
 ```
 
 Returns the updated `PhotoMeta`; re-renders `frame.png` before committing metadata. Invalid settings return 400, missing IDs return 404, and failed rendering or file writes leave stored metadata unchanged.
@@ -182,7 +184,7 @@ Deletes the metadata and files; returns 204. If that photo is currently displaye
 
 ## Quotes
 
-A saved quote is `{ "id":"01J...", "text":"...", "attribution":null, "font":"eb-garamond", "align":"left", "added_at":"...", "shown_count":0, "last_shown_at":null, "in_rotation":true }`. Text uses the renderer's normalized 2,000-character limit; the renderer's validation message is returned verbatim.
+A saved quote is `{ "id":"01J...", "text":"...", "attribution":null, "font":"eb-garamond", "align":"left", "added_at":"...", "shown_count":0, "last_shown_at":null }`. Text uses the renderer's normalized 2,000-character limit; the renderer's validation message is returned verbatim.
 
 On `PATCH /api/quotes/{id}`, omit `attribution` to leave it unchanged, send a string to set it, or send `null` to clear it.
 
@@ -195,14 +197,14 @@ Returns `{ "items":[Quote], "total":1 }`, newest first.
 Request:
 
 ```json
-{"text":"Hold fast to dreams.","attribution":"A reader","font":"eb-garamond","align":"center","in_rotation":true}
+{"text":"Hold fast to dreams.","attribution":"A reader","font":"eb-garamond","align":"center"}
 ```
 
 Returns 201 with the new quote, including its server-generated ID. Unknown fonts, empty quotes, and text over 2,000 characters return 400. A 2,001-character input receives the renderer's quote-limit message.
 
 ### `PATCH /api/quotes/{id}`
 
-Updates any supplied subset of `text`, `attribution`, `font`, `align`, and `in_rotation`; validates and fits the quote before saving. Returns the updated quote. Invalid input returns 400; missing IDs return 404.
+Updates any supplied subset of `text`, `attribution`, `font`, and `align`; validates and fits the quote before saving. Returns the updated quote. Invalid input returns 400; missing IDs return 404.
 
 ### `DELETE /api/quotes/{id}`
 

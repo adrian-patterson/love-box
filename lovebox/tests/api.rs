@@ -311,13 +311,12 @@ async fn local_api_and_web_contract_round_trip() {
         Method::PATCH,
         &format!("/api/photos/{photo_id}"),
         Some("application/json"),
-        br#"{"caption":"A framed moment","focal":{"x":0.7,"y":0.4},"dither":"atkinson","in_rotation":false}"#.to_vec(),
+        br#"{"caption":"A framed moment","focal":{"x":0.7,"y":0.4},"dither":"atkinson"}"#.to_vec(),
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
     let patched = json(response).await;
     assert_eq!(patched["dither"], "atkinson");
-    assert_eq!(patched["in_rotation"], false);
     assert_eq!(patched["caption"], "A framed moment");
     assert_eq!(patched["focal"], serde_json::json!({"x":0.7,"y":0.4}));
     let response = request(
@@ -325,7 +324,7 @@ async fn local_api_and_web_contract_round_trip() {
         Method::PATCH,
         &format!("/api/photos/{photo_id}"),
         Some("application/json"),
-        br#"{"in_rotation":true}"#.to_vec(),
+        br#"{"enhance":true}"#.to_vec(),
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
@@ -424,13 +423,11 @@ async fn local_api_and_web_contract_round_trip() {
         Method::PATCH,
         &format!("/api/quotes/{quote_id}"),
         Some("application/json"),
-        br#"{"text":"A kinder thought","attribution":"A different reader","in_rotation":false}"#
-            .to_vec(),
+        br#"{"text":"A kinder thought","attribution":"A different reader"}"#.to_vec(),
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
     let updated_quote = json(response).await;
-    assert_eq!(updated_quote["in_rotation"], false);
     assert_eq!(updated_quote["attribution"], "A different reader");
     let response = request(
         &app,

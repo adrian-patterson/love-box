@@ -19,7 +19,6 @@ pub struct QuoteCreateRequest {
     pub attribution: Option<String>,
     pub font: Option<String>,
     pub align: Option<ApiAlign>,
-    pub in_rotation: Option<bool>,
 }
 
 #[derive(Deserialize, Default)]
@@ -29,7 +28,6 @@ pub struct QuotePatchRequest {
     pub attribution: PatchField<String>,
     pub font: Option<String>,
     pub align: Option<ApiAlign>,
-    pub in_rotation: Option<bool>,
 }
 
 pub async fn list(State(app): State<Arc<AppState>>) -> Json<serde_json::Value> {
@@ -78,7 +76,6 @@ pub async fn create(
         added_at: now(),
         shown_count: 0,
         last_shown_at: None,
-        in_rotation: request.in_rotation.unwrap_or(true),
     };
     app.store.update(|state| {
         state.quotes.push(quote.clone());
@@ -113,9 +110,6 @@ pub async fn patch(
     updated.attribution = attribution;
     updated.font = font;
     updated.align = align;
-    if let Some(in_rotation) = request.in_rotation {
-        updated.in_rotation = in_rotation;
-    }
     app.store.update(|state| {
         let quote = state
             .quotes

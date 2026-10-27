@@ -230,14 +230,16 @@ once, breaks whenever Google changes the page. Never the default path.
   today's time waits until tomorrow; a failed update retries after 10 min.
   `capabilities.daily` and `next_change_at` report it.
 - Slideshow mode — **done 2026-10-26**: the next card is due one interval after
-  `state.last_refresh_at` (any change, so a card sent by hand stays up a full interval;
-  a reboot shows one card, then carries on). In order takes the least recently shown
-  in-rotation item; shuffle picks at random from the less recently shown half, so nothing
-  repeats within half a cycle. `set` is `all` (photos and saved quotes in rotation) or
+  `state.last_refresh_at` (a reboot shows one card, then carries on). In order takes the
+  least recently shown library item; shuffle picks at random from the less recently shown half, so nothing
+  repeats within half a cycle. `set` is `all` (every photo and saved quote) or
   `tag:<name>` (photos with that tag). A one-item slideshow does not redraw.
   `POST /api/slideshow/next` shows the next card now; `capabilities.slideshow` and
   `next_change_at` report it. The UI follows UI-DESIGN (amber note under 3 min) rather
-  than an "advanced" toggle. Pause is choosing Pinned. Still to do: quiet hours (no refresh in a nightly window; the
+  than an "advanced" toggle. Revised 2026-10-27 after use: a card sent by hand pins it
+  (`POST /api/show` switches the mode to Pinned), the Now screen has Start slideshow /
+  Next / Pause, settings save as they change, and every library item rotates (the
+  per-item `in_rotation` flag is gone). Still to do: quiet hours (no refresh in a nightly window; the
   panel sleeps), a curated quotes list editable in the UI, quote render style (typographic
   layout, author line).
 - Acceptance: set "slideshow every 3 min" with 5 photos, observe 3 changes in 9 min in the

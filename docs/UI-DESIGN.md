@@ -68,7 +68,7 @@ sits above the home indicator with `env(safe-area-inset-bottom)` padding.
 |---|---|---|
 | Now | `/` | What the frame shows, frame status, quick actions |
 | Write | `/write` | Compose a note or quote, preview it, show it |
-| Library | `/library/photos`, `/library/quotes` | Photos and saved quotes; what is in rotation |
+| Library | `/library/photos`, `/library/quotes` | Photos and saved quotes; all of them rotate |
 | Settings | `/settings`, `/settings/status` | Display mode, slideshow, quiet hours, sources, status |
 
 Back and forward work: opening a photo or quote detail pushes a route
@@ -88,13 +88,21 @@ the form side by side. Content width is capped at 560 px in single-column layout
 - **The frame**: the current frame image at 5:3 in a thin bezel (1 px ink border, 12 px
   radius on the bezel, square corners on the image). Alt text describes the card ("Quote
   in EB Garamond, left-aligned").
-- **Caption** under it: what it is and why it is there ("Photo · slideshow, next in 12
-  min", "Quote · pinned").
-- **Quick actions** as a row of secondary buttons: "Next" (only in slideshow mode;
-  `POST /api/slideshow/next`), "Clear frame" (confirm). Pausing a slideshow is choosing
-  Pinned in Settings.
+- **Caption** under it: what it is ("Photo", "Quote").
+- **Mode strip** under the caption, one bordered row saying what happens next with the one
+  control that changes it. *Pinned*: "This stays up until you send something else." and a
+  primary "Start slideshow" (disabled, with a hint, while the library is empty).
+  *Slideshow*: "Next card today at 14:30 · every 15 minutes" (or "in a moment" when due),
+  "Next" (`POST /api/slideshow/next`) and "Pause". *Daily card*: "Next card tomorrow at
+  07:00" and "Pause". Pause switches to Pinned and keeps the current card.
+- **Sending by hand pins.** "Show on frame" in Write and "Show now" on a photo pin the card
+  (the server switches the mode to Pinned), so nothing sent by hand is replaced a few
+  minutes later. While a slideshow or daily mode runs, those screens say so under the button
+  ("Showing this pauses the slideshow. Start it again from Now."), and the toast reads "On
+  the frame · slideshow paused".
+- **Quick actions** as a row of secondary buttons: "Clear frame" (confirm), "Write".
 - **Empty state** on a fresh install: "Nothing on the frame yet." with two buttons, "Write
-  something" and "Add photos".
+  something" and "Add photos"; the mode strip follows once the library has something in it.
 - **Refresh moment**: when the frame finishes an update, the preview plays a short
   e-paper-style flash (ink, then paper, then the image, about 500 ms). Skipped under
   `prefers-reduced-motion`. This is the one decorative animation in the app.
@@ -170,15 +178,15 @@ A segmented switch at the top, **Photos · Quotes**, each its own route.
   Drag the box to move it, drag a corner to resize it (zoom 1–4×, opposite corner fixed,
   5:3 kept), or press elsewhere to move it there and keep dragging; arrow keys move it
   (Shift for bigger steps) and + / − zoom. On release the box centre becomes the focal
-  point and its size the zoom, and the preview re-renders; a Floyd–Steinberg / Atkinson choice labelled "Dither: Smooth / Crisp"; an
-  "In slideshow" switch; "Show now"; "Delete".
+  point and its size the zoom, and the preview re-renders; a Floyd–Steinberg / Atkinson choice labelled "Dither: Smooth / Crisp"; "Show now";
+  "Delete". Every photo in the library is in the slideshow; there is no per-photo switch.
 - **Select mode** for bulk actions: "Select" in the header, checkboxes on thumbnails, then
-  "Add to slideshow", "Remove from slideshow", "Delete".
+  "Delete".
 
 **Quotes**
 
 - A list of saved quotes: first line in the quote's own font, attribution and font name
-  as muted second line, an "In rotation" switch on the right.
+  as muted second line, a delete button on the right.
 - Tap a quote to open it in Write (`/write?quote=<id>`). "New quote" opens an empty Write.
 
 **Deleting** (photos and quotes): the item disappears at once and a toast offers "Undo" for
@@ -187,14 +195,17 @@ five items asks for confirmation first instead.
 
 ### Settings
 
-Grouped sections, each a card with a heading.
+Grouped sections, each a card with a heading. There is no Save button: each change saves
+itself about half a second after the last edit, so a run of edits is one request. The
+header's second line is a live status: "Changes save as you make them", then "Saving…",
+"Saved" with a tick, or "Not saved" with the server's message below.
 
 - **Display mode**: three radio cards with one-line explanations. *Pinned*: "Keeps the
-  current card until you change it." *Slideshow*: "Cycles through photos and quotes in
-  rotation." *Daily*: "A new card each day at a set time." When Daily is selected, a
+  current card until you change it." *Slideshow*: "Cycles through your photos and saved
+  quotes." *Daily*: "A new card each day at a set time." When Daily is selected, a
   "New card at" time input (default 07:00) and a helper explaining the choice (least
-  recently shown item marked "In slideshow") appear inside the card, ending "Next card
-  today/tomorrow at HH:MM" once saved. The Now screen appends "· Next card …" from
+  recently shown photo or saved quote) appear inside the card, ending "Next card
+  today/tomorrow at HH:MM". The Now screen's mode strip shows the same from
   `next_change_at`. Modes the server does not support yet are
   shown disabled with "Coming soon".
 - **Slideshow**: interval as a select of presets (15 s, 30 s, 1 min, 2 min, 3 min, 5 min,
@@ -202,12 +213,12 @@ Grouped sections, each a card with a heading.
   3 min shows an amber inline note, not a dialog: "Faster than every 3 minutes means a
   visible flash each time and wears the panel sooner. The panel maker recommends at least 3
   minutes." Below it: order (Shuffle · In order) and the server-supported selection scope (`all` or a
-  tag). Photo and quote inclusion is changed on each library item; the server settings contract
+  tag). `all` is every photo and saved quote in the library; the server settings contract
   does not expose separate Photos and Quotes toggles.
 - **Quiet hours**: a switch, then "From" and "To" time inputs (`type="time"`). Helper:
   "No refreshes in this window; the frame keeps the last image."
 - The Slideshow card appears only when the server reports `capabilities.slideshow`, and
-  shows "Next card …" from `next_change_at` once saved. The Quiet hours card appears only
+  shows "Next card …" from `next_change_at` while the slideshow runs. The Quiet hours card appears only
   when it reports `capabilities.scheduler` (quiet hours, M5); until then nothing acts on them, so they are hidden rather than shown as
   working controls. The two time inputs share the row and shrink to fit at 320 px.
 - **Sources**: rows for Google Photos and AI notes. Each shows its state ("Not set up",

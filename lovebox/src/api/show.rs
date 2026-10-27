@@ -19,17 +19,34 @@ pub struct ShowResponse {
     shown_at: String,
     frame_revision: u64,
     last_refresh_duration_ms: u64,
+    /// True when this show stopped slideshow or daily mode by pinning the card.
+    paused: bool,
 }
 
 pub async fn show(
     State(app): State<Arc<AppState>>,
     ApiJson(card): ApiJson<ApiCard>,
 ) -> Result<Json<ShowResponse>, ApiError> {
-    show_card(app, card).await.map(Json)
+    show_by_hand(app, card).await.map(Json)
 }
 
 pub async fn clear(State(app): State<Arc<AppState>>) -> Result<Json<ShowResponse>, ApiError> {
-    show_card(app, ApiCard::Clear).await.map(Json)
+    show_by_hand(app, ApiCard::Clear).await.map(Json)
+}
+
+/// Shows a card someone chose and pins it, so slideshow or daily mode does not replace
+/// it a few minutes later. Re-showing the card already up (Refresh now) keeps the mode.
+pub async fn show_by_hand(app: Arc<AppState>, card: ApiCard) -> Result<ShowResponse, ApiError> {
+    let before = app.store.snapshot();
+    let mut response = show_card(app.clone(), card.clone()).await?;
+    if before.settings.mode != DisplayMode::Pinned && before.now_showing.as_ref() != Some(&card) {
+        app.store.update(|state| {
+            state.settings.mode = DisplayMode::Pinned;
+            Ok(())
+        })?;
+        response.paused = true;
+    }
+    Ok(response)
 }
 
 /// Shows the slideshow's next card now; the interval restarts from here.
@@ -47,7 +64,7 @@ pub async fn next(State(app): State<Arc<AppState>>) -> Result<Json<ShowResponse>
         ApiError::new(
             StatusCode::CONFLICT,
             "nothing_in_rotation",
-            "Nothing is marked “In slideshow” yet.",
+            "Add photos or save a quote to start the slideshow.",
         )
     })?;
     show_card(app, card).await.map(Json)
@@ -114,6 +131,7 @@ pub async fn show_card(app: Arc<AppState>, card: ApiCard) -> Result<ShowResponse
         shown_at,
         frame_revision: revision,
         last_refresh_duration_ms: duration_ms,
+        paused: false,
     })
 }
 

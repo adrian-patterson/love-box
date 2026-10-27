@@ -92,8 +92,16 @@ pub async fn fonts(State(app): State<Arc<AppState>>) -> Json<Vec<FontInfo>> {
 pub async fn state(State(app): State<Arc<AppState>>) -> Json<serde_json::Value> {
     let state = app.store.snapshot();
     let panel = PanelView::from(app.display.status());
-    let queue: Vec<_> = state.photos.iter().map(|photo| serde_json::json!({"type":"photo","id":photo.id,"in_rotation":photo.in_rotation}))
-        .chain(state.quotes.iter().map(|quote| serde_json::json!({"type":"quote","id":quote.id,"in_rotation":quote.in_rotation})))
+    let queue: Vec<_> = state
+        .photos
+        .iter()
+        .map(|photo| serde_json::json!({"type":"photo","id":photo.id}))
+        .chain(
+            state
+                .quotes
+                .iter()
+                .map(|quote| serde_json::json!({"type":"quote","id":quote.id})),
+        )
         .collect();
     let frame_url = if state.current_frame_png.is_some() {
         Some(format!(

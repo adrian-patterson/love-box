@@ -126,13 +126,12 @@ fn slideshow_tag(settings: &Settings) -> Option<&str> {
     settings.slideshow.set.strip_prefix("tag:")
 }
 
-/// The photos and saved quotes marked "in rotation", least recently shown first
+/// Every photo and saved quote in the library, least recently shown first
 /// (never-shown first, then oldest added). With `tag`, only photos carrying that tag.
 fn rotation(state: &State, tag: Option<&str>) -> Vec<ApiCard> {
     let photos = state
         .photos
         .iter()
-        .filter(|photo| photo.in_rotation)
         .filter(|photo| tag.is_none_or(|tag| photo.tags.iter().any(|t| t == tag)))
         .map(|photo| {
             (
@@ -143,30 +142,26 @@ fn rotation(state: &State, tag: Option<&str>) -> Vec<ApiCard> {
                 },
             )
         });
-    let quotes = state
-        .quotes
-        .iter()
-        .filter(|quote| quote.in_rotation && tag.is_none())
-        .map(|quote| {
-            (
-                quote.last_shown_at.clone(),
-                quote.added_at.clone(),
-                ApiCard::Quote {
-                    text: quote.text.clone(),
-                    attribution: quote.attribution.clone(),
-                    font: Some(quote.font.clone()),
-                    align: Some(quote.align),
-                },
-            )
-        });
+    let quotes = state.quotes.iter().filter(|_| tag.is_none()).map(|quote| {
+        (
+            quote.last_shown_at.clone(),
+            quote.added_at.clone(),
+            ApiCard::Quote {
+                text: quote.text.clone(),
+                attribution: quote.attribution.clone(),
+                font: Some(quote.font.clone()),
+                align: Some(quote.align),
+            },
+        )
+    });
     let mut items: Vec<_> = photos.chain(quotes).collect();
     // `None < Some(_)`, and RFC 3339 UTC timestamps sort chronologically as text.
     items.sort_by(|a, b| (&a.0, &a.1).cmp(&(&b.0, &b.1)));
     items.into_iter().map(|(_, _, card)| card).collect()
 }
 
-/// The next card for daily mode: the photo or saved quote marked "in rotation" that was
-/// shown least recently, so everything comes round once before anything repeats.
+/// The next card for daily mode: the photo or saved quote in the library that was shown
+/// least recently, so everything comes round once before anything repeats.
 pub fn next_daily_card(state: &State) -> Option<ApiCard> {
     rotation(state, None).into_iter().next()
 }
@@ -193,7 +188,7 @@ pub enum Tick {
     Idle,
     /// Showed a card.
     Shown(ApiCard),
-    /// Nothing is in rotation. Daily mode marks today done so the check does not repeat.
+    /// The library is empty. Daily mode marks today done so the check does not repeat.
     NothingInRotation,
     /// Another update is in progress; the next check tries again.
     Busy,
@@ -293,9 +288,7 @@ pub fn spawn(app: Arc<AppState>) -> JoinHandle<()> {
                 Tick::Shown(card) => info!(?card, "scheduled card shown"),
                 Tick::NothingInRotation => {
                     if !warned_empty {
-                        warn!(
-                            "nothing is in rotation; mark photos or saved quotes \"In slideshow\""
-                        );
+                        warn!("nothing to show; the library has no photos or saved quotes");
                         warned_empty = true;
                     }
                 }
@@ -389,7 +382,7 @@ mod tests {
         );
     }
 
-    fn photo(id: &str, added: &str, shown: Option<&str>, in_rotation: bool) -> PhotoMeta {
+    fn photo(id: &str, added: &str, shown: Option<&str>) -> PhotoMeta {
         PhotoMeta {
             id: id.into(),
             filename_original: format!("{id}.jpg"),
@@ -406,7 +399,6 @@ mod tests {
             shown_count: 0,
             last_shown_at: shown.map(Into::into),
             tags: Vec::new(),
-            in_rotation,
         }
     }
 
@@ -420,27 +412,15 @@ mod tests {
             added_at: added.into(),
             shown_count: 0,
             last_shown_at: shown.map(Into::into),
-            in_rotation: true,
         }
     }
 
     #[test]
-    fn next_card_is_least_recently_shown_in_rotation() {
+    fn next_card_is_least_recently_shown() {
         let mut state = State {
             photos: vec![
-                photo(
-                    "a",
-                    "2026-01-01T00:00:00Z",
-                    Some("2026-10-20T07:00:00Z"),
-                    true,
-                ),
-                photo(
-                    "b",
-                    "2026-01-02T00:00:00Z",
-                    Some("2026-10-25T07:00:00Z"),
-                    true,
-                ),
-                photo("off", "2026-01-03T00:00:00Z", None, false),
+                photo("a", "2026-01-01T00:00:00Z", Some("2026-10-20T07:00:00Z")),
+                photo("b", "2026-01-02T00:00:00Z", Some("2026-10-25T07:00:00Z")),
             ],
             quotes: vec![quote(
                 "q",
@@ -457,9 +437,7 @@ mod tests {
         state
             .quotes
             .push(quote("new", "2026-01-05T00:00:00Z", None));
-        state
-            .photos
-            .push(photo("c", "2026-01-06T00:00:00Z", None, true));
+        state.photos.push(photo("c", "2026-01-06T00:00:00Z", None));
         assert!(matches!(
             next_daily_card(&state),
             Some(ApiCard::Quote { text, .. }) if text == "new"
@@ -508,25 +486,14 @@ mod tests {
     }
 
     fn slideshow_state(order: SlideshowOrder, set: &str) -> State {
-        let mut tagged = photo("tagged", "2026-01-03T00:00:00Z", None, true);
+        let mut tagged = photo("tagged", "2026-01-03T00:00:00Z", None);
         tagged.tags = vec!["beach".into()];
         State {
             settings: slideshow(900, order, set),
             photos: vec![
-                photo(
-                    "a",
-                    "2026-01-01T00:00:00Z",
-                    Some("2026-10-25T07:00:00Z"),
-                    true,
-                ),
-                photo(
-                    "b",
-                    "2026-01-02T00:00:00Z",
-                    Some("2026-10-20T07:00:00Z"),
-                    true,
-                ),
+                photo("a", "2026-01-01T00:00:00Z", Some("2026-10-25T07:00:00Z")),
+                photo("b", "2026-01-02T00:00:00Z", Some("2026-10-20T07:00:00Z")),
                 tagged,
-                photo("off", "2026-01-04T00:00:00Z", None, false),
             ],
             quotes: vec![quote(
                 "q",

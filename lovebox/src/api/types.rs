@@ -109,7 +109,6 @@ pub struct PhotoMeta {
     pub shown_count: u64,
     pub last_shown_at: Option<String>,
     pub tags: Vec<String>,
-    pub in_rotation: bool,
 }
 
 /// The part of the stored copy (`width`x`height` pixels) that the panel shows: the
@@ -143,7 +142,7 @@ impl PhotoMeta {
 impl Serialize for PhotoMeta {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         use serde::ser::SerializeStruct;
-        let mut s = serializer.serialize_struct("PhotoMeta", 17)?;
+        let mut s = serializer.serialize_struct("PhotoMeta", 16)?;
         s.serialize_field("id", &self.id)?;
         s.serialize_field("filename_original", &self.filename_original)?;
         s.serialize_field("caption", &self.caption)?;
@@ -159,7 +158,6 @@ impl Serialize for PhotoMeta {
         s.serialize_field("shown_count", &self.shown_count)?;
         s.serialize_field("last_shown_at", &self.last_shown_at)?;
         s.serialize_field("tags", &self.tags)?;
-        s.serialize_field("in_rotation", &self.in_rotation)?;
         s.serialize_field("crop", &self.crop())?;
         s.end()
     }
@@ -175,7 +173,6 @@ pub struct Quote {
     pub added_at: String,
     pub shown_count: u64,
     pub last_shown_at: Option<String>,
-    pub in_rotation: bool,
 }
 
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -408,7 +405,6 @@ mod tests {
             shown_count: 0,
             last_shown_at: None,
             tags: Vec::new(),
-            in_rotation: true,
         }
     }
 
