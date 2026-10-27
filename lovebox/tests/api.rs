@@ -99,9 +99,6 @@ async fn local_api_and_web_contract_round_trip() {
     assert_eq!(response.status(), StatusCode::OK);
     let state = json(response).await;
     assert_eq!(state["mode"], "pinned");
-    assert_eq!(state["capabilities"]["scheduler"], false);
-    assert_eq!(state["capabilities"]["daily"], true);
-    assert_eq!(state["capabilities"]["slideshow"], true);
     assert_eq!(state["next_change_at"], serde_json::Value::Null);
 
     let response = request(&app, Method::GET, "/api/fonts", None, vec![]).await;
@@ -237,7 +234,6 @@ async fn local_api_and_web_contract_round_trip() {
     assert_eq!(json(response).await["total"], 0);
     let upload_defaults = serde_json::json!({
         "default_font":"eb-garamond","default_dither":"atkinson","enhance":false,
-        "quiet_hours":{"start":"23:00","end":"07:00","enabled":false},
         "slideshow":{"interval_s":900,"order":"shuffle","set":"all"},"mode":"pinned"
     });
     let response = request(
@@ -486,7 +482,6 @@ async fn local_api_and_web_contract_round_trip() {
     assert_eq!(response.status(), StatusCode::OK);
     let settings: serde_json::Value = serde_json::json!({
         "default_font":"eb-garamond","default_dither":"atkinson","enhance":false,
-        "quiet_hours":{"start":"22:30","end":"06:30","enabled":true},
         "slideshow":{"interval_s":60,"order":"upload","set":"all"},"mode":"slideshow"
     });
     let response = request(

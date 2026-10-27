@@ -8,3 +8,4 @@ web/node_modules/
 web/tsconfig.tsbuildinfo
 web/.vite/
 .playwright-mcp/
+lovebox/data/

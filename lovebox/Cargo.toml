@@ -6,10 +6,10 @@ description = "love-box: the e-paper picture frame service that runs on the Rasp
 publish = false
 build = "build.rs"
 
-# U-101 rule: no C dependencies yet (no openssl, ring, sqlite). Check with
+# Rule: no C dependencies (no openssl, ring, sqlite). Check with
 # `cargo tree --target arm-unknown-linux-gnueabihf -e build | grep -w cc` (expect nothing).
 [dependencies]
-# Renderer (U-201). All pure Rust. `image` without default features: no rayon (the Pi has one
+# Renderer. All pure Rust. `image` without default features: no rayon (the Pi has one
 # core) and only the formats the photo pipeline accepts. `png` is the same version `image`
 # uses; it is used directly to write 1-bit PNGs.
 ab_glyph = "0.2.32"

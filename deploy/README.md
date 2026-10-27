@@ -23,8 +23,7 @@ make deploy
 
 `provision.sh` does not enable SPI, set the hostname, or reboot (PI-SETUP §2 does).
 `deploy.sh` needs key-based SSH (BatchMode) and passwordless sudo for the SSH user.
-Status as of U-101: scripts exercised only against a fake Pi (arm32v7 Debian container
-with stub systemctl/sudo); the unit file is unverified. First real run is U-103.
+`deploy.sh` keeps the previous binary as `lovebox.prev`; `make rollback` swaps it back.
 
 ## Cross-compile route: cargo-zigbuild (route 1 of 3)
 
@@ -34,7 +33,7 @@ stripped binary ~1.3 MB. `cross` (Docker) and the musl static target were not ne
 `lovebox/.cargo/config.toml` pins `-C target-cpu=arm1176jzf-s` for this target only.
 Do not use any `armv7-*` target: it crashes on a Zero W.
 
-## Installed on the Mac (U-101, 2026-10-21)
+## Installed on the Mac (2026-10-21)
 
 - rustup (official installer) → stable 1.99.1 + `arm-unknown-linux-gnueabihf`, pinned by
   `rust-toolchain.toml`. It added `. "$HOME/.cargo/env"` to `~/.zshenv` and `~/.profile`.

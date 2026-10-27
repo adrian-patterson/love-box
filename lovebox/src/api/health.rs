@@ -129,9 +129,6 @@ pub async fn state(State(app): State<Arc<AppState>>) -> Json<serde_json::Value> 
         "panel": panel,
         "last_refresh_at": state.last_refresh_at,
         "last_refresh_duration_ms": state.last_refresh_duration_ms,
-        "quiet_hours_active": false,
-        "capabilities": {"scheduler":false,"daily":true,"slideshow":true,"google":false,"ai":false},
-        "sources": [],
         "quote_max_chars": QUOTE_MAX_CHARS,
         "message_max_chars": 3000,
         "queue": queue

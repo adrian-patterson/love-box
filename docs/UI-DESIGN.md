@@ -1,9 +1,8 @@
 # UI design — the phone web app
 
-The design contract for the web UI (milestone M3, unit U-302). It says what the app looks
-like, how it behaves, and what it needs from the server. The API shapes themselves belong
-to `docs/API.md` (written by the server unit, U-301); where this file and the API disagree,
-the API wins and this file is corrected.
+The design contract for the web UI. It says what the app looks like, how it behaves, and
+what it needs from the server. The API shapes themselves belong to `docs/API.md`; where
+this file and the API disagree, the API wins and this file is corrected.
 
 Produced with the ui-ux-pro-max design guidance (style, palette, typography and UX rule
 searches), then adjusted for this product; see "Recommendations not taken" at the end.
@@ -69,7 +68,7 @@ sits above the home indicator with `env(safe-area-inset-bottom)` padding.
 | Now | `/` | What the frame shows, frame status, quick actions |
 | Write | `/write` | Compose a note or quote, preview it, show it |
 | Library | `/library/photos`, `/library/quotes` | Photos and saved quotes; all of them rotate |
-| Settings | `/settings`, `/settings/status` | Display mode, slideshow, quiet hours, sources, status |
+| Settings | `/settings`, `/settings/status` | Display mode, slideshow, frame options, status |
 
 Back and forward work: opening a photo or quote detail pushes a route
 (`/library/photos/<id>`, `/write?quote=<id>`), and closing it goes back. Every screen is
@@ -82,8 +81,8 @@ the form side by side. Content width is capped at 560 px in single-column layout
 
 ### Now
 
-- **Status line** at the top: a dot and a word. Green "Ready", amber "Updating…", amber
-  "Paused (quiet hours)", red "Not responding". Always paired with text, never colour
+- **Status line** at the top: a dot and a word. Green "Ready", amber "Updating…", red
+  "Not responding". Always paired with text, never colour
   alone. Shows the time of the last refresh ("Updated 2 min ago"), refreshed every 30 s.
 - **The frame**: the current frame image at 5:3 in a thin bezel (1 px ink border, 12 px
   radius on the bezel, square corners on the image). Alt text describes the card ("Quote
@@ -123,8 +122,7 @@ The composer for notes and quotes. Top to bottom on a phone:
    - Over the limit: a red inline error, linked with `aria-describedby`, "That's 3,214
      characters; the maximum is 3,000." The Show button is disabled with the reason
      visible, never silently.
-   The limit and the error text come from the server; 3,000 is the current default and
-   may change (see the open question in PLAN.md "Where things stand").
+   The limit and the error text come from the server; 3,000 is the current default.
    Pasting a page of a book is a normal case, not an edge case: the field accepts it, the
    counter and preview handle it, and blank lines are kept as paragraph breaks.
 3. **Style**, always visible, not hidden in a menu:
@@ -206,8 +204,7 @@ header's second line is a live status: "Changes save as you make them", then "Sa
   "New card at" time input (default 07:00) and a helper explaining the choice (least
   recently shown photo or saved quote) appear inside the card, ending "Next card
   today/tomorrow at HH:MM". The Now screen's mode strip shows the same from
-  `next_change_at`. Modes the server does not support yet are
-  shown disabled with "Coming soon".
+  `next_change_at`.
 - **Slideshow**: interval as a select of presets (15 s, 30 s, 1 min, 2 min, 3 min, 5 min,
   15 min, 30 min, 1 h, 3 h, 6 h, 12 h, 24 h), default 15 min. Choosing anything under
   3 min shows an amber inline note, not a dialog: "Faster than every 3 minutes means a
@@ -215,16 +212,11 @@ header's second line is a live status: "Changes save as you make them", then "Sa
   minutes." Below it: order (Shuffle · In order) and the server-supported selection scope (`all` or a
   tag). `all` is every photo and saved quote in the library; the server settings contract
   does not expose separate Photos and Quotes toggles.
-- **Quiet hours**: a switch, then "From" and "To" time inputs (`type="time"`). Helper:
-  "No refreshes in this window; the frame keeps the last image."
-- The Slideshow card appears only when the server reports `capabilities.slideshow`, and
-  shows "Next card …" from `next_change_at` while the slideshow runs. The Quiet hours card appears only
-  when it reports `capabilities.scheduler` (quiet hours, M5); until then nothing acts on them, so they are hidden rather than shown as
-  working controls. The two time inputs share the row and shrink to fit at 320 px.
-- **Sources**: rows for Google Photos and AI notes. Each shows its state ("Not set up",
-  "Connected", "Token expired") with a link to the setup section of the docs. Rows for
-  features the server reports as unavailable are hidden, not broken.
-- **Frame**: "Refresh now", "Clear frame" (confirm).
+- The Slideshow card shows "Next card …" from `next_change_at` while the slideshow runs.
+- **Frame**: default font, default dither, "Enhance uploaded photos", "Fast refresh"
+  (fewer flashes, at some risk of a faint trace of the last card; on by default), then
+  "Refresh now" and "Clear frame" (confirm). Refresh now shows a spinner while the frame
+  updates.
 - **Status** (route `/settings/status`): version and git revision, uptime, last refresh
   time and duration, refreshes today, panel state, disk free, photo count, CPU temperature
   when available. Read-only, monospace for values, refreshed every 30 s while open.
@@ -298,7 +290,7 @@ below 16 px.
 
 ## What the UI needs from the server
 
-For U-301 to settle in `docs/API.md`; listed here so the two units meet:
+Settled in `docs/API.md`:
 
 1. SPA fallback: any `GET` outside `/api/*`, `/healthz`, and static assets returns
    `index.html`. Hashed assets are served with `Cache-Control: public, max-age=31536000,
@@ -309,9 +301,7 @@ For U-301 to settle in `docs/API.md`; listed here so the two units meet:
    Auto, and whether fixed-size text was truncated.
 4. A current-frame image URL that changes when the frame changes (an ETag or a revision
    query parameter), and a state document with: what is showing and why, mode, next
-   change time, last refresh time and duration, panel state (`ready`, `busy`, `wedged`),
-   quiet-hours status, and capability flags for features not built yet (scheduler, Google
-   Photos, AI notes).
+   change time, last refresh time and duration, panel state (`ready`, `busy`, `wedged`).
 5. Error bodies with a human-readable message the UI can show verbatim, plus a stable code.
 6. Server-generated ids for every photo and quote.
 7. Upload accepts one file per request so the UI can show per-file progress and errors.

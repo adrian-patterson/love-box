@@ -1,8 +1,6 @@
 # History
 
-How love-box got to where it is. For what is planned next, see
-[docs/PLAN.md](docs/PLAN.md); for the reasoning behind big choices, see
-[docs/decisions/](docs/decisions/).
+How love-box got to where it is.
 
 ## 2022: the first version
 
@@ -17,10 +15,9 @@ then stopped working on current Raspberry Pi OS. The code is kept at git tag
 The whole stack was replaced by one Rust binary running on the Pi, with no cloud account,
 so the frame keeps working when the internet is down.
 
-- **Plan and decisions (21 October).** Agent context, the plan, research notes and the Pi
-  runbook. State moved from Firebase to one JSON document on the Pi (ADR-002). Google
-  Photos became an import through Google's Picker API, because third-party apps can no
-  longer follow albums.
+- **Plan (21 October).** Agent context, research notes and the Pi runbook. State moved
+  to one JSON document on the Pi instead of a database
+  ([ADR-002](docs/decisions/ADR-002-state-storage.md)).
 - **Renderer (21–22 October).** Message cards at the 2022 sizes in bundled open-licence
   fonts, quotes that auto-fit up to 2,000 characters, and photos decoded under a memory
   budget, cropped and dithered to 1-bit. Golden-frame tests compare the output pixel for
@@ -57,3 +54,6 @@ so the frame keeps working when the internet is down.
   refresh, not extra work by the app. The driver library was replaced by our own code
   following Waveshare's, which can use their shorter "fast" refresh: on by default, with a
   Settings switch back to the standard one. An update went from 7.0 s to 4.5 s.
+- **Feature complete (27 October).** Quiet hours, Google Photos import and AI-written notes
+  were dropped from the roadmap, and the plan document with them. Old state files that
+  still carry quiet-hours settings load and ignore them.

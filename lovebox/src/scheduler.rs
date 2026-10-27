@@ -7,11 +7,9 @@
 //! - Daily: once the time has passed and today's card has not been shown, it shows one.
 //!   The day is recorded in `State::last_daily_on`, so a reboot after the time catches up
 //!   with exactly one card and never bursts through missed days.
-//! - Slideshow: the next card is due one interval after the frame last changed, whether
-//!   the slideshow or a person changed it, so a card sent by hand stays up for a full
-//!   interval and a reboot shows one card, then carries on.
-//!
-//! Quiet hours are not implemented yet (M5).
+//! - Slideshow: the next card is due one interval after the frame last changed, so a
+//!   reboot shows one card, then carries on. A card sent by hand pins the frame
+//!   (`api::show::show_by_hand`), which stops both modes.
 
 use std::sync::Arc;
 use std::time::Duration;

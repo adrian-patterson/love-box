@@ -1,10 +1,10 @@
 # ADR-002: State lives in a JSON document, not SQLite
 
-Date: 2026-10-21 · Status: accepted (manager decision within ADR-001's standing authority)
+Date: 2026-10-21 · Status: accepted
 
 ## Context
 
-docs/PLAN.md originally named SQLite for settings, the card queue, photo metadata, quotes,
+The first design named SQLite for settings, the card queue, photo metadata, quotes,
 and show history. On the Pi Zero W the binary is cross-compiled for ARMv6 through
 `cargo-zigbuild`; `rusqlite`'s bundled SQLite is ~250k lines of C compiled by `zig cc`
 for every build and is the only C dependency the project would have. The data is small:

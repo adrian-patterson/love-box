@@ -1,7 +1,8 @@
 //! `lovebox`: the love-box e-paper frame service (binary; the library is `src/lib.rs`).
 //!
-//! `lovebox serve` (U-101) logs one startup line, then a heartbeat every 300 s until
-//! SIGTERM or SIGINT, and exits 0. Later milestones add the web server (docs/PLAN.md).
+//! `lovebox serve` serves the API and web app, runs the display worker and scheduler, logs
+//! a heartbeat every 300 s, and exits 0 on SIGTERM or SIGINT. `lovebox import` resizes
+//! photos on a laptop before uploading them.
 
 use std::io::{self, IsTerminal};
 use std::path::PathBuf;

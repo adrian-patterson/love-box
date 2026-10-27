@@ -8,7 +8,7 @@
 # --static-only skips (c), for deploy.sh, so shipping does not need Docker running.
 #
 # (c) cannot prove ARMv6: Docker's qemu-arm emulates a newer CPU and will happily run
-# ARMv7 instructions. (b) is the ARMv6 proof; the real test is running on the Pi (U-103).
+# ARMv7 instructions. (b) is the ARMv6 proof; the real test is running on the Pi.
 #
 # Needs: file (macOS), greadelf (`brew install binutils`) or readelf, docker with an arm
 # binfmt emulator (colima on this Mac; see deploy/README.md).

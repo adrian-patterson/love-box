@@ -1,4 +1,4 @@
-# Toolchain for the lovebox crate (U-101). Picked up by rustup from any directory below
+# Toolchain for the lovebox crate. Picked up by rustup from any directory below
 # the repo root, so `cd lovebox && cargo ...` uses it.
 # Target: Raspberry Pi Zero W v1 = ARM1176JZF-S = ARMv6 + VFPv2, hard float, 32-bit.
 # Do NOT switch to armv7-*: an armv7 binary dies with SIGILL/segfault on a Zero W.

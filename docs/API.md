@@ -57,19 +57,18 @@ Returns operational information. Returns 503 when `panel.state` is `wedged`; the
 
 ### `GET /api/state`
 
-Returns current content and UI capabilities. No scheduler is implemented yet: `next_change_at` is `null`, `quiet_hours_active` is `false`, and future display modes are stored but not acted on.
+Returns what the frame shows, the mode, and when it next changes. `next_change_at` is `null` in pinned mode and when the library is empty; `queue` lists every photo and saved quote the slideshow and daily modes draw from.
 
 ```json
 {
   "now_showing":{"type":"message","text":"Good morning, love.","size":48,"font":"eb-garamond"},
   "mode":"pinned","reason":"pinned","next_change_at":null,
   "current_frame_url":"/api/frame/current.png?rev=3","frame_revision":3,
-  "settings":{"default_font":"eb-garamond","default_dither":"floyd_steinberg","enhance":true,"quiet_hours":{"start":"23:00","end":"07:00","enabled":false},"slideshow":{"interval_s":900,"order":"shuffle","set":"all"},"mode":"pinned"},
+  "settings":{"default_font":"eb-garamond","default_dither":"floyd_steinberg","enhance":true,"fast_refresh":true,"slideshow":{"interval_s":900,"order":"shuffle","set":"all"},"daily":{"time":"07:00"},"mode":"pinned"},
   "panel":{"name":"png","state":"ready","last_show_at":"2026-10-22T10:00:00Z","last_error":null,"shows_total":1,"last_refresh_duration_ms":14},
   "last_refresh_at":"2026-10-22T10:00:00Z","last_refresh_duration_ms":14,
-  "quiet_hours_active":false,
-  "capabilities":{"scheduler":false,"google":false,"ai":false},"sources":[],
-  "quote_max_chars":2000,"message_max_chars":3000
+  "quote_max_chars":2000,"message_max_chars":3000,
+  "queue":[{"type":"photo","id":"01J..."},{"type":"quote","id":"01J..."}]
 }
 ```
 
@@ -224,13 +223,13 @@ Replaces the full settings document. Fields:
 {
   "default_font":"eb-garamond","default_dither":"floyd_steinberg","enhance":true,
   "fast_refresh":true,
-  "quiet_hours":{"start":"23:00","end":"07:00","enabled":false},
   "slideshow":{"interval_s":900,"order":"shuffle","set":"all"},
+  "daily":{"time":"07:00"},
   "mode":"pinned"
 }
 ```
 
-`interval_s` must be at least 15 (default 900); `order` is `shuffle` or `upload`; `set` is `all` or `tag:<name>`; `mode` is `pinned`, `slideshow`, or `daily`. `fast_refresh` (default `true`, and `true` for state saved before it existed) picks the panel's shorter refresh waveform: fewer flashes, at some risk of faint ghosting. Quiet-hour times use `HH:MM`. Every accepted field is stored; quiet hours are not acted on yet. The response contains the saved document and `scheduler: "daily_slideshow"`. Invalid settings, including an interval below 15, return 400 and do not alter state.
+`interval_s` must be at least 15 (default 900); `order` is `shuffle` or `upload`; `set` is `all` or `tag:<name>`; `mode` is `pinned`, `slideshow`, or `daily`. `fast_refresh` (default `true`, and `true` for state saved before it existed) picks the panel's shorter refresh waveform: fewer flashes, at some risk of faint ghosting. `daily.time` uses `HH:MM`. A `quiet_hours` object in older state or requests is ignored. The response contains the saved document and `scheduler: "daily_slideshow"`. Invalid settings, including an interval below 15, return 400 and do not alter state.
 
 ## Web app and unknown paths
 

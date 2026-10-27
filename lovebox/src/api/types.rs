@@ -193,23 +193,6 @@ pub enum SlideshowOrder {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub struct QuietHours {
-    pub start: String,
-    pub end: String,
-    pub enabled: bool,
-}
-
-impl Default for QuietHours {
-    fn default() -> Self {
-        Self {
-            start: "23:00".to_owned(),
-            end: "07:00".to_owned(),
-            enabled: false,
-        }
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SlideshowSettings {
     pub interval_s: u64,
     pub order: SlideshowOrder,
@@ -249,7 +232,6 @@ pub struct Settings {
     /// written before it existed (2026-10-27), which turns it on.
     #[serde(default = "fast_refresh_default")]
     pub fast_refresh: bool,
-    pub quiet_hours: QuietHours,
     pub slideshow: SlideshowSettings,
     /// Absent in state written before daily mode existed (2026-10-26).
     #[serde(default)]
@@ -268,7 +250,6 @@ impl Default for Settings {
             default_dither: DitherChoice::FloydSteinberg,
             enhance: true,
             fast_refresh: true,
-            quiet_hours: QuietHours::default(),
             slideshow: SlideshowSettings::default(),
             daily: DailySettings::default(),
             mode: DisplayMode::Pinned,
@@ -281,16 +262,11 @@ impl Settings {
         if self.slideshow.interval_s < 15 {
             return Err("slideshow.interval_s must be at least 15".to_owned());
         }
-        for (name, time) in [
-            ("quiet_hours.start", &self.quiet_hours.start),
-            ("quiet_hours.end", &self.quiet_hours.end),
-            ("daily.time", &self.daily.time),
-        ] {
-            let parsed = chrono::NaiveTime::parse_from_str(time, "%H:%M")
-                .map_err(|_| format!("{name} must be a time in HH:MM format"))?;
-            if parsed.format("%H:%M").to_string() != *time {
-                return Err(format!("{name} must be a time in HH:MM format"));
-            }
+        let (name, time) = ("daily.time", &self.daily.time);
+        let parsed = chrono::NaiveTime::parse_from_str(time, "%H:%M")
+            .map_err(|_| format!("{name} must be a time in HH:MM format"))?;
+        if parsed.format("%H:%M").to_string() != *time {
+            return Err(format!("{name} must be a time in HH:MM format"));
         }
         if let Some(tag) = self.slideshow.set.strip_prefix("tag:") {
             if tag.trim().is_empty() {

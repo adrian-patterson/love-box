@@ -1,6 +1,6 @@
 # Raspberry Pi provisioning runbook
 
-This is the procedure milestone M1 executes. It is written so an agent with SSH access can
+How to take a blank microSD card to a running frame. It is written so an agent with SSH access can
 run it step by step and so a human can audit what was done. Commands that change the Pi
 are marked; everything else is read-only.
 

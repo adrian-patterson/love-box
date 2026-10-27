@@ -1,4 +1,0 @@
-cd lovebox && cargo zigbuild --release --target arm-unknown-linux-gnueabihf.2.36
-   Compiling lovebox v0.1.0 (/Users/adrian/love-box/lovebox)
-    Finished `release` profile [optimized] target(s) in 35.57s
--rwxr-xr-x@ 1 adrian  staff  7851816 Oct 22 17:06 lovebox/target/arm-unknown-linux-gnueabihf/release/lovebox

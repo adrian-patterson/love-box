@@ -1,9 +1,8 @@
 # love-box
 
 An e-paper picture frame you control from your phone. Send a note, pick a photo, or let it
-rotate through your favourites; the panel updates in seconds. Built as a gift for leaving
-messages for someone you love. Runs entirely on a Raspberry Pi Zero W on your home network,
-with no cloud account.
+run a slideshow of your favourites. Built as a gift for leaving messages for someone you
+love. It runs on a Raspberry Pi Zero W on your home network.
 
 ## The frame
 
@@ -21,40 +20,55 @@ with no cloud account.
 
 ## The web interface
 
-The local web app works on a phone or desktop, in light and dark themes. These captures show the current interface running against the embedded service.
+A small web app served by the frame itself, at `http://lovebox.local`. It works on a phone
+or a laptop, in light and dark themes; save it to the home screen and it opens like an app.
+The screenshots use demo content.
 
-![love-box web interface on desktop in the light theme](docs/screenshots/ui-desktop-light.png)
+![Now screen on a laptop: the frame's current photo and the slideshow controls](docs/screenshots/ui-desktop-light.png)
 
-| Phone · light theme | Phone · dark theme |
-|---|---|
-| ![Now screen on a phone in the light theme](docs/screenshots/ui-mobile-light.png) | ![Now screen on a phone in the dark theme](docs/screenshots/ui-mobile-dark.png) |
-
-![Photo library detail screen on a phone](docs/screenshots/ui-photo-detail.png)
+<table>
+<tr>
+<th>Now</th><th>Now, dark theme</th><th>Library</th>
+</tr>
+<tr>
+<td><img src="docs/screenshots/ui-mobile-light.png" width="250" alt="Now screen on a phone: the photo on the frame, the slideshow's next card time, Next and Pause"></td>
+<td><img src="docs/screenshots/ui-mobile-dark.png" width="250" alt="The same Now screen in the dark theme"></td>
+<td><img src="docs/screenshots/ui-library.png" width="250" alt="Photo library grid with five photos"></td>
+</tr>
+<tr>
+<th>Write</th><th>Photo crop</th><th>Settings</th>
+</tr>
+<tr>
+<td><img src="docs/screenshots/ui-write.png" width="250" alt="Write screen: a quote previewed exactly as the frame will show it, with font and size choices"></td>
+<td><img src="docs/screenshots/ui-photo-detail.png" width="250" alt="Photo screen: a crop box over the photo and the dithered black-and-white preview"></td>
+<td><img src="docs/screenshots/ui-settings.png" width="250" alt="Settings: display mode, slideshow interval and order, frame options including Fast refresh"></td>
+</tr>
+</table>
 
 ## What it does
 
-- **Web page on your LAN** at `http://lovebox.local`. Anyone on the Wi-Fi can send a message
-  or choose a photo from a phone. No app, no account, no internet needed.
 - **Messages and quotes**: type a message in four sizes, or a quote that auto-fits the
-  frame in one of several open-licence fonts. Save quotes to a library.
-- **Photos**: upload from your phone; each one is cropped to the panel (drag and resize
-  the crop box to choose what shows) and dithered to black and white.
-- **Modes**: pin one card until you change it; Slideshow: a new photo or saved quote
-  every interval you choose (15 seconds to 24 hours), shuffled or in order; or Daily: a
-  new one each day at a time you choose. Both cycle through everything before repeating.
-  Every change is a full refresh: about 4 seconds, with a visible black-and-white flash.
-- **Planned** ([docs/PLAN.md](docs/PLAN.md)): quiet hours overnight, photos
-  picked from Google Photos (through Google's Picker API), and optional AI-written daily
-  notes and captions through the Claude API.
-- **Preview equals panel**: the page shows the exact 800x480 frame the e-paper will show.
-- **Boring to operate**: one-command deploy from your laptop, a systemd service, a health
-  page, backups, and everything testable on a laptop without the hardware.
+  frame in one of several open-licence fonts. Save quotes to the library.
+- **Photos**: upload from your phone; each is cropped to the panel (drag and resize the
+  crop box to choose what shows) and dithered to black and white.
+- **Preview equals panel**: every preview is the exact 800x480 frame the panel will show,
+  rendered by the frame's own code.
+- **Modes**: *Pinned* keeps one card up. *Slideshow* shows a new photo or saved quote every
+  interval (15 seconds to 24 hours), shuffled or in order. *Daily* shows a new one each day
+  at a set time. Everything in the library takes part, and everything comes round before
+  anything repeats. Sending something by hand pins it, pausing the slideshow; Start
+  slideshow on the Now screen resumes it.
+- **Refresh**: every change is one full refresh. *Fast refresh* (the default) uses
+  Waveshare's shorter waveform: fewer flashes and about 4.5 s from wake to sleep. Turn it
+  off in Settings for the standard refresh (more flashes, cleanest image).
+- **Easy to run**: one-command deploy from a laptop, a systemd service, a status page,
+  backups, and everything testable on a laptop without the hardware.
 
 ## Hardware
 
 | Part | Notes |
 |---|---|
-| [Waveshare 7.5" e-Paper HAT](https://www.waveshare.com/7.5inch-e-paper-hat.htm), V2 panel | 800x480, 1-bit black and white, SPI. Every update is a ~4 s full refresh with a flash; no partial refresh in the Rust driver. Waveshare advises ≥180 s between refreshes for panel life |
+| [Waveshare 7.5" e-Paper HAT](https://www.waveshare.com/7.5inch-e-paper-hat.htm), V2 panel | 800x480, 1-bit black and white, SPI. Every update is a full refresh with a few flashes; no partial refresh. Waveshare advises ≥180 s between refreshes for panel life |
 | Raspberry Pi Zero W | The original, single-core ARMv6, 512 MB. A Zero 2 W also fits the same case and HAT |
 | 5 V / 2.5 A micro-USB power supply | Into the port marked PWR IN. A thin or long cable causes brownouts |
 | microSD card, 8 GB or more | Buy one that ships with an SD adapter for flashing |
@@ -80,29 +94,46 @@ CS 8 (SPI0 CE0), BUSY 24; SPI0 at 4 MHz. SPI is enabled at first boot by the set
 ## Repository
 
 ```
-lovebox/     Rust crate: the service
+lovebox/     Rust crate: the service (API, renderer, panel driver, scheduler)
+web/         React web app; web/dist is built output, committed and embedded in the binary
 deploy/      systemd unit, provision/deploy/backup scripts, ARMv6 check
-docs/        PLAN.md (design and milestones), PI-SETUP.md (blank card to running Pi),
-             RESEARCH.md (sourced findings), decisions/ (ADRs)
-web/         React web app, built into the binary
+docs/        API.md, UI-DESIGN.md, PI-SETUP.md (blank card to running Pi),
+             RESEARCH.md (panel and toolchain notes), decisions/, screenshots/
 Makefile     make test | lint | run | build-pi | check-pi | deploy | rollback | backup
-AGENTS.md    entry point for AI coding agents
+AGENTS.md    rules and context for AI coding agents
 HISTORY.md   what has changed, and when
 ```
 
-## Getting started
+## Developer quick-start
 
-1. Flash a card and bring the Pi onto your Wi-Fi: [docs/PI-SETUP.md](docs/PI-SETUP.md).
-2. On your laptop: install [rustup](https://rustup.rs), then `cargo install cargo-zigbuild`
-   and a `zig` it can find (see [deploy/README.md](deploy/README.md)).
-3. `make test`, then `make deploy HOST=pi@lovebox.local`.
+You need [rustup](https://rustup.rs) (the toolchain is pinned by `rust-toolchain.toml`) and
+Node with npm. Deploying also needs `cargo-zigbuild` and a `zig` it can find; see
+[deploy/README.md](deploy/README.md).
 
-### With an AI coding agent
+```bash
+make run
+```
 
-[AGENTS.md](AGENTS.md) tells an agent what the project is, the rendering rules to preserve,
-the commands that exist, and the rules for working here. Open the repo in Claude Code or any
-agent that reads `AGENTS.md` and point it at the next unfinished milestone in
-`docs/PLAN.md`. Secrets (Wi-Fi, OAuth client, API keys) never go in the repo.
+That builds the web app and starts the service at `http://localhost:8080` with a PNG panel
+instead of the e-paper: each frame is written to `lovebox/data/panel/frame.png`, and state
+and photos live in `lovebox/data/` (gitignored). Delete that folder to start fresh.
+
+- **Changing the web app**: edit `web/src/main.tsx` and `web/src/style.css`, then rerun
+  `make run`. The built assets in `web/dist` are embedded in the binary, so commit them
+  with the source.
+- **Before committing**: `make lint` (rebuilds the web app, `cargo fmt --check`, clippy)
+  and `make test`. Rendering changes are checked against golden PNGs in
+  `lovebox/tests/golden/`; regenerate them with `UPDATE_GOLDENS=1 make test`.
+- **On the Pi**: `make deploy` builds for ARMv6, ships the binary, restarts the service and
+  fails loudly if it does not come up; `make rollback` restores the previous binary;
+  `make backup` copies the frame's data to the laptop. Logs:
+  `ssh pi@lovebox.local journalctl -u lovebox -f`. The status page is under Settings.
+- **New Pi or new card**: [docs/PI-SETUP.md](docs/PI-SETUP.md).
+
+The HTTP API is in [docs/API.md](docs/API.md) and the UI's design rules in
+[docs/UI-DESIGN.md](docs/UI-DESIGN.md). [AGENTS.md](AGENTS.md) holds the rules for working
+here (with or without an AI agent): rendering rules to preserve, the hardware boundary,
+and no secrets in the repo.
 
 ## History
 
