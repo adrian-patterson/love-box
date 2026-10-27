@@ -1,25 +1,51 @@
 //! Waveshare 7.5-inch V2 panel integration.
 //!
 //! The driver is intentionally available only on Linux ARM with the `hardware` feature.
-//! Lifecycle sequencing is kept separate from GPIO/SPI so native tests can exercise it.
+//! The command sequences live in [`Lifecycle`], over a byte-level [`Device`], so native
+//! tests check exactly what goes down the wire. They follow Waveshare's own drivers
+//! (`EPD_7in5_V2.c`, `epd7in5_V2.py`); `epd-waveshare` was dropped 2026-10-27 because it
+//! has no way to send the fast-refresh registers.
 
+#[cfg(any(
+    test,
+    all(feature = "hardware", target_os = "linux", target_arch = "arm")
+))]
+use super::Refresh;
 use super::{Panel, PanelError};
 #[cfg(any(
     test,
     all(feature = "hardware", target_os = "linux", target_arch = "arm")
 ))]
 use crate::frame::Frame;
+#[cfg(any(
+    test,
+    all(feature = "hardware", target_os = "linux", target_arch = "arm")
+))]
+use std::time::Duration;
 
+/// The SPI, GPIO and clock primitives the panel protocol is written in.
 #[cfg(any(
     test,
     all(feature = "hardware", target_os = "linux", target_arch = "arm")
 ))]
 trait Device {
-    fn wake_up(&mut self) -> Result<(), String>;
-    fn update_and_refresh(&mut self, frame: &[u8]) -> Result<(), String>;
-    fn wait_until_idle(&mut self) -> Result<(), String>;
-    fn sleep(&mut self) -> Result<(), String>;
+    /// Pulses RST: high 20 ms, low 2 ms, high 20 ms.
+    fn reset(&mut self) -> Result<(), String>;
+    /// Sends one command byte (DC low).
+    fn command(&mut self, command: u8) -> Result<(), String>;
+    /// Sends data bytes (DC high).
+    fn data(&mut self, data: &[u8]) -> Result<(), String>;
+    /// True while BUSY is low (the V2 panel only updates it after a 0x71 status command).
+    fn is_busy(&mut self) -> Result<bool, String>;
+    fn delay_ms(&mut self, ms: u64);
 }
+
+/// Longest the panel may stay busy: a full refresh takes about 4 s.
+#[cfg(any(
+    test,
+    all(feature = "hardware", target_os = "linux", target_arch = "arm")
+))]
+const BUSY_LIMIT: Duration = Duration::from_secs(20);
 
 #[cfg(any(
     test,
@@ -27,6 +53,7 @@ trait Device {
 ))]
 struct Lifecycle<D> {
     device: D,
+    refresh: Refresh,
 }
 
 #[cfg(any(
@@ -34,129 +61,158 @@ struct Lifecycle<D> {
     all(feature = "hardware", target_os = "linux", target_arch = "arm")
 ))]
 impl<D: Device> Lifecycle<D> {
-    fn show(&mut self, frame: &Frame) -> Result<(), PanelError> {
-        self.device.wake_up().map_err(device_error)?;
-        // One full refresh per update. Its waveform already wipes the previous image, so
-        // the 2022 white pre-clear only doubled the flashing (~6 flashes, ~8 s) on the
-        // first on-panel test; dropped 2026-10-26.
-        self.refresh(frame)
+    fn new(device: D) -> Self {
+        Self {
+            device,
+            refresh: Refresh::Full,
+        }
     }
 
-    fn refresh(&mut self, frame: &Frame) -> Result<(), PanelError> {
-        // The V2 controller's new-data register (0x13) takes 1 = black, the inverse of
-        // Frame's 1 = white; Waveshare's own drivers send `~image` (EPD_7IN5_V2_Display in C,
-        // `buf[i] ^= 0xFF` in Python). epd-waveshare passes bytes through unchanged, which
-        // showed a negative on the first on-panel test (2026-10-26).
-        let wire: Vec<u8> = frame.as_packed_bytes().iter().map(|byte| !byte).collect();
-        self.device
-            .update_and_refresh(&wire)
-            .map_err(device_error)?;
-        // Upstream display_frame sends DisplayRefresh and returns immediately. Wait here so
-        // callers never report success or enter deep sleep before the full refresh is done.
-        self.device.wait_until_idle().map_err(device_error)
+    /// Wakes the panel (it is always in deep sleep between updates) and shows `frame` with
+    /// one refresh. One refresh per update: its waveform already wipes the previous image,
+    /// so the 2022 white pre-clear only doubled the flashing; dropped 2026-10-26.
+    fn show(&mut self, frame: &Frame) -> Result<(), PanelError> {
+        self.init()?;
+        // Old-data RAM (0x10) gets the frame as is and new-data RAM (0x13) its inverse, as
+        // Waveshare's drivers send them: the controller takes 1 = black in 0x13, the
+        // inverse of Frame's 1 = white (the first on-panel test showed a negative,
+        // 2026-10-26), and every pixel differs between the two, so every pixel is driven.
+        let bytes = frame.as_packed_bytes();
+        let wire: Vec<u8> = bytes.iter().map(|byte| !byte).collect();
+        self.send(0x10, bytes)?;
+        self.send(0x13, &wire)?;
+        self.device.command(0x12).map_err(PanelError::Device)?;
+        self.device.delay_ms(100);
+        self.wait_until_idle()
+    }
+
+    fn init(&mut self) -> Result<(), PanelError> {
+        self.device.reset().map_err(PanelError::Device)?;
+        self.send(0x06, &[0x17, 0x17, 0x28, 0x17])?; // booster soft start
+        self.send(0x01, &[0x07, 0x07, 0x28, 0x17])?; // power setting
+        self.device.command(0x04).map_err(PanelError::Device)?; // power on
+        self.device.delay_ms(100);
+        self.wait_until_idle()?;
+        self.send(0x00, &[0x1F])?; // panel setting: black/white, waveform from OTP
+        self.send(0x61, &[0x03, 0x20, 0x01, 0xE0])?; // resolution 800 x 480
+        self.send(0x15, &[0x00])?; // single SPI
+        self.send(0x50, &[0x10, 0x07])?; // VCOM and data interval
+        self.send(0x60, &[0x22])?; // TCON
+        if self.refresh == Refresh::Fast {
+            // Waveshare's EPD_7IN5_V2_Init_Fast: a stronger booster, then pin the
+            // temperature the controller picks its OTP waveform by (0xE0 enables the
+            // fixed value, 0xE5 sets it), which selects a shorter waveform with fewer
+            // flashes (about 1.5 s instead of 4 s).
+            self.send(0x06, &[0x27, 0x27, 0x18, 0x17])?;
+            self.send(0xE0, &[0x02])?;
+            self.send(0xE5, &[0x5A])?;
+        }
+        Ok(())
     }
 
     fn sleep(&mut self) -> Result<(), PanelError> {
-        self.device.sleep().map_err(device_error)
+        self.send(0x50, &[0xF7])?; // border floating
+        self.device.command(0x02).map_err(PanelError::Device)?; // power off
+        self.wait_until_idle()?;
+        self.send(0x07, &[0xA5]) // deep sleep
     }
-}
 
-#[cfg(any(
-    test,
-    all(feature = "hardware", target_os = "linux", target_arch = "arm")
-))]
-fn device_error(message: String) -> PanelError {
-    PanelError::Device(message)
+    fn send(&mut self, command: u8, data: &[u8]) -> Result<(), PanelError> {
+        self.device.command(command).map_err(PanelError::Device)?;
+        self.device.data(data).map_err(PanelError::Device)
+    }
+
+    /// Polls BUSY after a 0x71 status command, as the V2 panel needs, up to [`BUSY_LIMIT`]
+    /// of polling delays.
+    fn wait_until_idle(&mut self) -> Result<(), PanelError> {
+        let mut waited = Duration::ZERO;
+        loop {
+            self.device.command(0x71).map_err(PanelError::Device)?;
+            if !self.device.is_busy().map_err(PanelError::Device)? {
+                break;
+            }
+            if waited >= BUSY_LIMIT {
+                return Err(PanelError::Timeout(BUSY_LIMIT));
+            }
+            self.device.delay_ms(5);
+            waited += Duration::from_millis(5);
+        }
+        self.device.delay_ms(20);
+        Ok(())
+    }
 }
 
 #[cfg(all(feature = "hardware", target_os = "linux", target_arch = "arm"))]
 mod linux_arm {
-    use super::{Device, Lifecycle, Panel, PanelError};
+    use super::{Device, Lifecycle, Panel, PanelError, Refresh};
     use crate::frame::Frame;
-    use epd_waveshare::epd7in5_v2::{Epd7in5, HEIGHT, WIDTH};
-    use epd_waveshare::prelude::WaveshareDisplay;
-    use rppal::gpio::Gpio;
-    use rppal::hal::Delay;
-    use rppal::spi::{Bus, Mode, SimpleHalSpiDevice, SlaveSelect, Spi};
+    use rppal::gpio::{Gpio, InputPin, OutputPin};
+    use rppal::spi::{Bus, Mode, SlaveSelect, Spi};
+    use std::thread;
+    use std::time::Duration;
+
+    /// spidev's default transfer limit (`bufsiz`); a frame is 48,000 bytes.
+    const SPI_CHUNK: usize = 4096;
 
     struct HardwareDevice {
-        spi: SimpleHalSpiDevice,
-        epd: Epd7in5<
-            SimpleHalSpiDevice,
-            rppal::gpio::InputPin,
-            rppal::gpio::OutputPin,
-            rppal::gpio::OutputPin,
-            Delay,
-        >,
-        delay: Delay,
+        spi: Spi,
+        busy: InputPin,
+        dc: OutputPin,
+        rst: OutputPin,
     }
 
     impl HardwareDevice {
         fn new() -> Result<Self, PanelError> {
-            let gpio = Gpio::new().map_err(|error| PanelError::Device(error.to_string()))?;
-            let busy = gpio
-                .get(24)
-                .map_err(|error| PanelError::Device(error.to_string()))?
-                .into_input();
-            let dc = gpio
-                .get(25)
-                .map_err(|error| PanelError::Device(error.to_string()))?
-                .into_output();
-            let rst = gpio
-                .get(17)
-                .map_err(|error| PanelError::Device(error.to_string()))?
-                .into_output();
+            let gpio = Gpio::new().map_err(device_error)?;
+            let busy = gpio.get(24).map_err(device_error)?.into_input();
+            let dc = gpio.get(25).map_err(device_error)?.into_output();
+            let rst = gpio.get(17).map_err(device_error)?.into_output();
             let spi = Spi::new(Bus::Spi0, SlaveSelect::Ss0, 4_000_000, Mode::Mode0)
-                .map_err(|error| PanelError::Device(error.to_string()))?;
-            let mut spi = SimpleHalSpiDevice::new(spi);
-            let mut delay = Delay::new();
-            let epd = Epd7in5::new(&mut spi, busy, dc, rst, &mut delay, None)
-                .map_err(|error| PanelError::Device(error.to_string()))?;
-            Ok(Self { spi, epd, delay })
+                .map_err(device_error)?;
+            Ok(Self { spi, busy, dc, rst })
         }
     }
 
+    fn device_error(error: impl std::fmt::Display) -> PanelError {
+        PanelError::Device(error.to_string())
+    }
+
     impl Device for HardwareDevice {
-        fn wake_up(&mut self) -> Result<(), String> {
-            self.epd
-                .wake_up(&mut self.spi, &mut self.delay)
-                .map_err(|error| error.to_string())
+        fn reset(&mut self) -> Result<(), String> {
+            self.rst.set_high();
+            self.delay_ms(20);
+            self.rst.set_low();
+            self.delay_ms(2);
+            self.rst.set_high();
+            self.delay_ms(20);
+            Ok(())
         }
 
-        fn update_and_refresh(&mut self, frame: &[u8]) -> Result<(), String> {
-            if frame.len() != (WIDTH as usize / 8) * HEIGHT as usize {
-                return Err(format!("expected 48000 frame bytes, got {}", frame.len()));
+        fn command(&mut self, command: u8) -> Result<(), String> {
+            self.dc.set_low();
+            self.spi.write(&[command]).map_err(|e| e.to_string())?;
+            Ok(())
+        }
+
+        fn data(&mut self, data: &[u8]) -> Result<(), String> {
+            self.dc.set_high();
+            for chunk in data.chunks(SPI_CHUNK) {
+                self.spi.write(chunk).map_err(|e| e.to_string())?;
             }
-            self.epd
-                .update_and_display_frame(&mut self.spi, frame, &mut self.delay)
-                .map_err(|error| error.to_string())
+            Ok(())
         }
 
-        fn wait_until_idle(&mut self) -> Result<(), String> {
-            self.epd
-                .wait_until_idle(&mut self.spi, &mut self.delay)
-                .map_err(|error| error.to_string())
+        fn is_busy(&mut self) -> Result<bool, String> {
+            Ok(self.busy.is_low())
         }
 
-        fn sleep(&mut self) -> Result<(), String> {
-            self.epd
-                .sleep(&mut self.spi, &mut self.delay)
-                .map_err(|error| error.to_string())
+        fn delay_ms(&mut self, ms: u64) {
+            thread::sleep(Duration::from_millis(ms));
         }
     }
 
     pub(super) struct WavesharePanel {
         lifecycle: Lifecycle<HardwareDevice>,
-    }
-
-    impl WavesharePanel {
-        fn new() -> Result<Self, PanelError> {
-            Ok(Self {
-                lifecycle: Lifecycle {
-                    device: HardwareDevice::new()?,
-                },
-            })
-        }
     }
 
     impl Panel for WavesharePanel {
@@ -172,13 +228,19 @@ mod linux_arm {
             self.lifecycle.sleep()
         }
 
+        fn set_refresh(&mut self, refresh: Refresh) {
+            self.lifecycle.refresh = refresh;
+        }
+
         fn name(&self) -> &'static str {
             "waveshare-7in5-v2"
         }
     }
 
     pub(super) fn create() -> Result<Box<dyn Panel>, PanelError> {
-        Ok(Box::new(WavesharePanel::new()?))
+        Ok(Box::new(WavesharePanel {
+            lifecycle: Lifecycle::new(HardwareDevice::new()?),
+        }))
     }
 }
 
@@ -214,70 +276,132 @@ mod unsupported_tests {
 
 #[cfg(test)]
 mod tests {
-    use super::{Device, Lifecycle};
+    use super::{Device, Lifecycle, Refresh};
     use crate::frame::Frame;
-    use std::sync::{Arc, Mutex};
+    use crate::panel::PanelError;
 
     #[derive(Clone, Debug, PartialEq, Eq)]
     enum Event {
-        Wake,
-        Refresh(Vec<u8>),
-        Wait,
-        Sleep,
+        Reset,
+        Command(u8),
+        Data(Vec<u8>),
     }
 
-    struct FakeDevice(Arc<Mutex<Vec<Event>>>);
+    /// Records the wire traffic; BUSY reads busy `busy_polls` times, then idle, each wait.
+    #[derive(Default)]
+    struct FakeDevice {
+        events: Vec<Event>,
+        busy_polls: usize,
+        polls_left: usize,
+        stuck: bool,
+    }
 
     impl Device for FakeDevice {
-        fn wake_up(&mut self) -> Result<(), String> {
-            self.0.lock().unwrap().push(Event::Wake);
+        fn reset(&mut self) -> Result<(), String> {
+            self.events.push(Event::Reset);
             Ok(())
         }
+        fn command(&mut self, command: u8) -> Result<(), String> {
+            self.events.push(Event::Command(command));
+            Ok(())
+        }
+        fn data(&mut self, data: &[u8]) -> Result<(), String> {
+            self.events.push(Event::Data(data.to_vec()));
+            Ok(())
+        }
+        fn is_busy(&mut self) -> Result<bool, String> {
+            if self.stuck {
+                return Ok(true);
+            }
+            if self.polls_left > 0 {
+                self.polls_left -= 1;
+                return Ok(true);
+            }
+            self.polls_left = self.busy_polls;
+            Ok(false)
+        }
+        fn delay_ms(&mut self, _: u64) {}
+    }
 
-        fn update_and_refresh(&mut self, frame: &[u8]) -> Result<(), String> {
-            self.0.lock().unwrap().push(Event::Refresh(frame.to_vec()));
-            Ok(())
+    /// Commands with their data, status polls (0x71) left out.
+    fn sequence(events: &[Event]) -> Vec<(u8, Vec<u8>)> {
+        let mut out: Vec<(u8, Vec<u8>)> = Vec::new();
+        for event in events {
+            match event {
+                Event::Command(0x71) | Event::Reset => {}
+                Event::Command(c) => out.push((*c, Vec::new())),
+                Event::Data(d) => out.last_mut().unwrap().1.extend(d),
+            }
         }
+        out
+    }
 
-        fn wait_until_idle(&mut self) -> Result<(), String> {
-            self.0.lock().unwrap().push(Event::Wait);
-            Ok(())
+    fn init_commands(fast: bool) -> Vec<(u8, Vec<u8>)> {
+        let mut init = vec![
+            (0x06, vec![0x17, 0x17, 0x28, 0x17]),
+            (0x01, vec![0x07, 0x07, 0x28, 0x17]),
+            (0x04, vec![]),
+            (0x00, vec![0x1F]),
+            (0x61, vec![0x03, 0x20, 0x01, 0xE0]),
+            (0x15, vec![0x00]),
+            (0x50, vec![0x10, 0x07]),
+            (0x60, vec![0x22]),
+        ];
+        if fast {
+            init.extend([
+                (0x06, vec![0x27, 0x27, 0x18, 0x17]),
+                (0xE0, vec![0x02]),
+                (0xE5, vec![0x5A]),
+            ]);
         }
-
-        fn sleep(&mut self) -> Result<(), String> {
-            self.0.lock().unwrap().push(Event::Sleep);
-            Ok(())
-        }
+        init
     }
 
     #[test]
-    fn wake_shows_frame_with_one_refresh_waits_and_sleeps() {
-        let events = Arc::new(Mutex::new(Vec::new()));
-        let mut panel = Lifecycle {
-            device: FakeDevice(events.clone()),
-        };
-        let frame = Frame::black();
-        panel.show(&frame).unwrap();
+    fn full_refresh_resets_inits_sends_both_planes_refreshes_once_and_sleeps() {
+        let mut panel = Lifecycle::new(FakeDevice::default());
+        panel.show(&Frame::black()).unwrap();
         panel.sleep().unwrap();
 
-        let actual = events.lock().unwrap();
+        assert_eq!(panel.device.events[0], Event::Reset);
         assert_eq!(
-            actual.as_slice(),
-            [
-                Event::Wake,
-                Event::Refresh(vec![0xFF; 48_000]),
-                Event::Wait,
-                Event::Sleep
-            ]
+            panel
+                .device
+                .events
+                .iter()
+                .filter(|e| **e == Event::Reset)
+                .count(),
+            1
         );
+        let mut expected = init_commands(false);
+        expected.extend([
+            (0x10, vec![0x00; 48_000]),
+            (0x13, vec![0xFF; 48_000]),
+            (0x12, vec![]),
+            (0x50, vec![0xF7]),
+            (0x02, vec![]),
+            (0x07, vec![0xA5]),
+        ]);
+        assert_eq!(sequence(&panel.device.events), expected);
     }
 
     #[test]
-    fn frame_mapping_inverts_bits_for_the_v2_wire_and_preserves_pixel_order() {
-        let events = Arc::new(Mutex::new(Vec::new()));
-        let mut panel = Lifecycle {
-            device: FakeDevice(events.clone()),
-        };
+    fn fast_refresh_adds_waveshares_fast_init_registers() {
+        let mut panel = Lifecycle::new(FakeDevice::default());
+        panel.refresh = Refresh::Fast;
+        panel.show(&Frame::white()).unwrap();
+        let mut expected = init_commands(true);
+        expected.extend([
+            (0x10, vec![0xFF; 48_000]),
+            (0x13, vec![0x00; 48_000]),
+            (0x12, vec![]),
+        ]);
+        assert_eq!(sequence(&panel.device.events), expected);
+    }
+
+    #[test]
+    fn new_data_plane_inverts_bits_and_preserves_pixel_order() {
+        let mut panel = Lifecycle::new(FakeDevice::default());
         let mut patterned = Frame::white();
         patterned.set(0, 0, crate::frame::Pixel::Black);
         patterned.set(7, 0, crate::frame::Pixel::Black);
@@ -285,11 +409,8 @@ mod tests {
         patterned.set(799, 479, crate::frame::Pixel::Black);
         panel.show(&patterned).unwrap();
 
-        let actual = events.lock().unwrap();
-        assert_eq!(actual.len(), 3);
-        let Event::Refresh(bytes) = &actual[1] else {
-            panic!("expected show refresh")
-        };
+        let sent = sequence(&panel.device.events);
+        let (_, bytes) = sent.iter().find(|(c, _)| *c == 0x13).unwrap();
         // Frame bytes 0x7E, 0x7F, 0xFE (1 = white) go out inverted (1 = black).
         assert_eq!(bytes[0], 0x81);
         assert_eq!(bytes[1], 0x80);
@@ -298,44 +419,32 @@ mod tests {
     }
 
     #[test]
-    fn white_clear_refreshes_once_after_wake() {
-        let events = Arc::new(Mutex::new(Vec::new()));
-        let mut panel = Lifecycle {
-            device: FakeDevice(events.clone()),
-        };
+    fn busy_is_polled_with_a_status_command_until_idle() {
+        let mut panel = Lifecycle::new(FakeDevice {
+            busy_polls: 3,
+            polls_left: 3,
+            ..FakeDevice::default()
+        });
         panel.show(&Frame::white()).unwrap();
-        let actual = events.lock().unwrap();
-        assert_eq!(
-            actual.as_slice(),
-            [Event::Wake, Event::Refresh(vec![0x00; 48_000]), Event::Wait]
-        );
-    }
-
-    struct FailingDevice;
-
-    impl Device for FailingDevice {
-        fn wake_up(&mut self) -> Result<(), String> {
-            Err("fake wake error".to_owned())
-        }
-        fn update_and_refresh(&mut self, _: &[u8]) -> Result<(), String> {
-            Ok(())
-        }
-        fn wait_until_idle(&mut self) -> Result<(), String> {
-            Ok(())
-        }
-        fn sleep(&mut self) -> Result<(), String> {
-            Ok(())
-        }
+        // Two waits (after power on, after refresh), each 3 busy polls plus the idle one.
+        let polls = panel
+            .device
+            .events
+            .iter()
+            .filter(|e| **e == Event::Command(0x71))
+            .count();
+        assert_eq!(polls, 8);
     }
 
     #[test]
-    fn device_errors_propagate_to_panel_error() {
-        let mut panel = Lifecycle {
-            device: FailingDevice,
-        };
+    fn a_panel_that_never_goes_idle_times_out() {
+        let mut panel = Lifecycle::new(FakeDevice {
+            stuck: true,
+            ..FakeDevice::default()
+        });
         assert!(matches!(
-            panel.show(&Frame::black()),
-            Err(crate::panel::PanelError::Device(message)) if message == "fake wake error"
+            panel.show(&Frame::white()),
+            Err(PanelError::Timeout(_))
         ));
     }
 }

@@ -51,4 +51,9 @@ so the frame keeps working when the internet is down.
   up (sending pauses the slideshow or daily card), and the Now screen says what happens
   next with Start slideshow, Next and Pause. Settings save as you change them, with no
   Save button. Every photo and saved quote in the library is in the slideshow, so the
-  per-item "In slideshow" switches and the add/remove bulk actions are gone.
+  per-item "In slideshow" switches and the add/remove bulk actions are gone. "Show now"
+  on a photo and "Refresh now" show a spinner while the frame updates.
+- **Fast refresh (27 October).** The panel's 3–4 flashes per change are its own built-in
+  refresh, not extra work by the app. The driver library was replaced by our own code
+  following Waveshare's, which can use their shorter "fast" refresh: on by default, with a
+  Settings switch back to the standard one. An update went from 7.0 s to 4.5 s.

@@ -13,6 +13,7 @@ use super::common::{now, ApiJson};
 use super::error::ApiError;
 use super::types::{ApiCard, DisplayMode, Shown};
 use super::AppState;
+use crate::panel::Refresh;
 
 #[derive(Serialize)]
 pub struct ShowResponse {
@@ -82,7 +83,12 @@ pub async fn show_card(app: Arc<AppState>, card: ApiCard) -> Result<ShowResponse
     })?;
     let rendered = render_card(app.clone(), card).await?;
     let shown_at = now();
-    let duration_ms = app.display.show(rendered.frame.clone()).await?;
+    let refresh = if app.store.snapshot().settings.fast_refresh {
+        Refresh::Fast
+    } else {
+        Refresh::Full
+    };
+    let duration_ms = app.display.show(rendered.frame.clone(), refresh).await?;
     let frame_png = rendered.frame.to_png();
     let revision = app.store.snapshot().frame_revision.saturating_add(1);
     let result = app.store.update(|state| {

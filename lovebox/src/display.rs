@@ -8,7 +8,7 @@ use tokio::sync::{mpsc, oneshot};
 use tracing::{error, info};
 
 use crate::frame::Frame;
-use crate::panel::{Panel, PanelError};
+use crate::panel::{Panel, PanelError, Refresh};
 
 #[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -60,7 +60,7 @@ impl std::fmt::Display for DisplayError {
 impl std::error::Error for DisplayError {}
 
 enum Command {
-    Show(Frame, oneshot::Sender<Result<u64, String>>),
+    Show(Frame, Refresh, oneshot::Sender<Result<u64, String>>),
     Clear(oneshot::Sender<Result<u64, String>>),
 }
 
@@ -134,14 +134,15 @@ impl DisplayHandle {
                 while let Some(command) = rx.blocking_recv() {
                     if !begin_operation(&worker_status) {
                         let reply = match command {
-                            Command::Show(_, reply) | Command::Clear(reply) => reply,
+                            Command::Show(_, _, reply) | Command::Clear(reply) => reply,
                         };
                         let _ = reply.send(Err("display worker is wedged".to_owned()));
                         break;
                     }
                     let (reply, result) = match command {
-                        Command::Show(frame, reply) => {
+                        Command::Show(frame, refresh, reply) => {
                             let start = Instant::now();
+                            panel.set_refresh(refresh);
                             let result = panel.show(&frame).and_then(|_| panel.sleep());
                             (
                                 reply,
@@ -242,8 +243,9 @@ impl DisplayHandle {
         })
     }
 
-    pub async fn show(&self, frame: Frame) -> Result<u64, DisplayError> {
-        self.execute(|reply| Command::Show(frame, reply)).await
+    pub async fn show(&self, frame: Frame, refresh: Refresh) -> Result<u64, DisplayError> {
+        self.execute(|reply| Command::Show(frame, refresh, reply))
+            .await
     }
 
     pub async fn clear(&self) -> Result<u64, DisplayError> {
@@ -360,7 +362,7 @@ mod tests {
         )
         .unwrap();
         let frame = Frame::black();
-        handle.show(frame.clone()).await.unwrap();
+        handle.show(frame.clone(), Refresh::Full).await.unwrap();
         let saved = std::fs::read(PathBuf::from(dir.path()).join("panel/frame.png")).unwrap();
         assert_eq!(crate::library::decode_frame_png(&saved).unwrap(), frame);
         assert_eq!(handle.status().state, DisplayState::Idle);
@@ -417,7 +419,7 @@ mod tests {
         .unwrap();
         let start = Instant::now();
         assert!(matches!(
-            handle.show(Frame::black()).await,
+            handle.show(Frame::black(), Refresh::Full).await,
             Err(DisplayError::Timeout(_))
         ));
         assert!(start.elapsed() >= Duration::from_millis(900));
@@ -438,7 +440,7 @@ mod tests {
         )
         .unwrap();
         assert!(matches!(
-            handle.show(Frame::black()).await,
+            handle.show(Frame::black(), Refresh::Full).await,
             Err(DisplayError::Timeout(_))
         ));
         tokio::time::sleep(Duration::from_millis(240)).await;
@@ -460,7 +462,8 @@ mod tests {
         )
         .unwrap();
         let task_handle = handle.clone();
-        let task = tokio::spawn(async move { task_handle.show(Frame::black()).await });
+        let task =
+            tokio::spawn(async move { task_handle.show(Frame::black(), Refresh::Full).await });
         tokio::time::timeout(Duration::from_secs(1), async {
             while handle.status().state != DisplayState::Busy {
                 tokio::task::yield_now().await;

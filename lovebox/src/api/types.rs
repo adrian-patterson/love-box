@@ -245,6 +245,10 @@ pub struct Settings {
     pub default_font: String,
     pub default_dither: DitherChoice,
     pub enhance: bool,
+    /// Waveshare's shorter refresh: fewer flashes, maybe faint ghosting. Absent in state
+    /// written before it existed (2026-10-27), which turns it on.
+    #[serde(default = "fast_refresh_default")]
+    pub fast_refresh: bool,
     pub quiet_hours: QuietHours,
     pub slideshow: SlideshowSettings,
     /// Absent in state written before daily mode existed (2026-10-26).
@@ -253,12 +257,17 @@ pub struct Settings {
     pub mode: DisplayMode,
 }
 
+fn fast_refresh_default() -> bool {
+    true
+}
+
 impl Default for Settings {
     fn default() -> Self {
         Self {
             default_font: "eb-garamond".to_owned(),
             default_dither: DitherChoice::FloydSteinberg,
             enhance: true,
+            fast_refresh: true,
             quiet_hours: QuietHours::default(),
             slideshow: SlideshowSettings::default(),
             daily: DailySettings::default(),
@@ -387,6 +396,20 @@ mod optional_base64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn settings_saved_before_fast_refresh_existed_load_with_it_on() {
+        let mut json = serde_json::to_value(Settings::default()).unwrap();
+        json.as_object_mut().unwrap().remove("fast_refresh");
+        let settings: Settings = serde_json::from_value(json).unwrap();
+        assert!(settings.fast_refresh);
+        let off = Settings {
+            fast_refresh: false,
+            ..Settings::default()
+        };
+        let back: Settings = serde_json::from_value(serde_json::to_value(&off).unwrap()).unwrap();
+        assert!(!back.fast_refresh);
+    }
 
     fn meta(width: u32, height: u32, focal: Option<FocalPoint>) -> PhotoMeta {
         PhotoMeta {

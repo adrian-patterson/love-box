@@ -57,7 +57,7 @@ phone / laptop ──http://lovebox.local──▶ lovebox (Rust, on the Pi)
                                            ├─ renderer: text / photo / quote → 800x480 1-bit frame
                                            │     (same code renders the UI preview as PNG)
                                            ├─ Panel trait
-                                           │     ├─ WavesharePanel  (epd-waveshare + rppal, feature "hardware")
+                                           │     ├─ WavesharePanel  (own V2 driver + rppal, feature "hardware")
                                            │     └─ PngPanel        (writes frame.png; default on macOS)
                                            └─ optional sources: Google Photos Picker, Immich, Claude API
 ```

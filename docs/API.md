@@ -223,13 +223,14 @@ Replaces the full settings document. Fields:
 ```json
 {
   "default_font":"eb-garamond","default_dither":"floyd_steinberg","enhance":true,
+  "fast_refresh":true,
   "quiet_hours":{"start":"23:00","end":"07:00","enabled":false},
   "slideshow":{"interval_s":900,"order":"shuffle","set":"all"},
   "mode":"pinned"
 }
 ```
 
-`interval_s` must be at least 15 (default 900); `order` is `shuffle` or `upload`; `set` is `all` or `tag:<name>`; `mode` is `pinned`, `slideshow`, or `daily`. Quiet-hour times use `HH:MM`. Every accepted field is stored. Only `pinned` currently drives display behavior; other modes return successfully and are not acted on until the scheduler is implemented. The response contains the saved document and `scheduler: "not implemented"`. Invalid settings, including an interval below 15, return 400 and do not alter state.
+`interval_s` must be at least 15 (default 900); `order` is `shuffle` or `upload`; `set` is `all` or `tag:<name>`; `mode` is `pinned`, `slideshow`, or `daily`. `fast_refresh` (default `true`, and `true` for state saved before it existed) picks the panel's shorter refresh waveform: fewer flashes, at some risk of faint ghosting. Quiet-hour times use `HH:MM`. Every accepted field is stored; quiet hours are not acted on yet. The response contains the saved document and `scheduler: "daily_slideshow"`. Invalid settings, including an interval below 15, return 400 and do not alter state.
 
 ## Web app and unknown paths
 

@@ -39,9 +39,10 @@ One Rust binary, `lovebox`, on the Pi:
   (Vite + React + TypeScript, built on the laptop) and a JSON API.
 - Local state only: one JSON state document and a photo directory under `/var/lib/lovebox`
   (docs/decisions/ADR-002).
-- Display module behind a `Panel` trait: `WavesharePanel` (hardware via `epd-waveshare`
-  `epd7in5_v2` + `rppal`, Cargo feature `hardware`) and `PngPanel` (writes the frame to a
-  PNG so everything develops and tests on a laptop with no hardware).
+- Display module behind a `Panel` trait: `WavesharePanel` (our own V2 command sequences,
+  following Waveshare's drivers, over `rppal` SPI/GPIO, Cargo feature `hardware`) and
+  `PngPanel` (writes the frame to a PNG so everything develops and tests on a laptop with
+  no hardware).
 - Renderer produces the exact 800x480 1-bit frame for text, photos (dithered), and quotes;
   the same renderer backs the UI's preview, so preview equals panel.
 - Content is a queue of cards (text, photo, quote, generated note) with a mode: pinned,
@@ -62,9 +63,10 @@ One Rust binary, `lovebox`, on the Pi:
 - A message of exactly `clear` blanks the panel.
 - Photos are cover-cropped to 800x480. The old version did no dithering; the new one must.
 - Pin mapping (BCM): RST 17, DC 25, CS 8 (SPI0 CE0), BUSY 24. SPI bus 0, device 0, 4 MHz.
-  The V2 panel only updates BUSY after a status command (0x71); `epd-waveshare` on `main`
-  handles that (see docs/RESEARCH.md §3) but has no timeout in its busy loop, so wrap panel
-  calls with our own timeout on a dedicated blocking thread.
+  The V2 panel only updates BUSY after a status command (0x71); the driver sends it before
+  every poll and gives up after 20 s, and the display worker adds its own timeout on a
+  dedicated blocking thread. A "Fast refresh" setting (on by default since 2026-10-27)
+  uses Waveshare's shorter waveform (docs/RESEARCH.md §3).
 
 ## Commands
 
@@ -114,5 +116,5 @@ go through `make build-pi`. Never target `armv7-*`: it segfaults on the Zero W.
 - Pi provisioning runbook: [docs/PI-SETUP.md](docs/PI-SETUP.md)
 - Decisions: [docs/decisions/](docs/decisions/)
 - Deploy kit details: [deploy/README.md](deploy/README.md)
-- Rust driver: https://github.com/rust-embedded-community/epd-waveshare (module `epd7in5_v2`)
+- Vendor driver the panel code follows: `EPD_7in5_V2.c` / `epd7in5_V2.py` in the repo below
 - Panel protocol reference (vendor C/Python examples): https://github.com/waveshare/e-Paper

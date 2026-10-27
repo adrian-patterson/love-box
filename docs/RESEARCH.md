@@ -52,7 +52,8 @@ non-Google source (Immich, a shared folder) or the fragile scraper.
 
 ## 3. Rust on the display
 
-- **Driver:** `epd-waveshare` (rust-embedded-community) has `epd7in5_v2`
+- **Driver (superseded 2026-10-27 by our own, see "Why one refresh still flashes" below):**
+  `epd-waveshare` (rust-embedded-community) has `epd7in5_v2`
   (800x480, `Display7in5`, `Epd7in5`). v0.6.0 released 2024-10-28.
   Sources: [docs.rs](https://docs.rs/epd-waveshare/latest/epd_waveshare/),
   [CHANGELOG](https://github.com/rust-embedded-community/epd-waveshare/blob/main/CHANGELOG.md).
@@ -79,6 +80,14 @@ non-Google source (Immich, a shared folder) or the fragile scraper.
   changes a few times a day, and deep sleep between updates.
   Sources: [7.5inch e-Paper HAT Manual](https://www.waveshare.com/wiki/7.5inch_e-Paper_HAT_Manual),
   [Waveshare ESP32 e-paper notes](https://docs.waveshare.com/ESP32-Peripheral-Tutorials/Display/E-Paper).
+- **Why one refresh still flashes several times (checked 2026-10-27):** the black/white
+  flashes are the full-refresh waveform stored in the panel itself; we send one refresh
+  command per change. Waveshare's `EPD_7IN5_V2_Init_Fast` selects a shorter waveform
+  (after `0x00: 0x1F`, `0x50: 0x10 0x07`, power on: `0x06: 0x27 0x27 0x18 0x17`,
+  `0xE0: 0x02`, `0xE5: 0x5A`, i.e. it pins the temperature the waveform is chosen by).
+  `epd-waveshare` has no public way to send those bytes, so on 2026-10-27 it was replaced by
+  our own driver on `rppal` (`lovebox/src/panel/waveshare.rs`), with fast refresh as a
+  setting. First on-panel run: 4.5 s from wake to deep sleep, against 7.0 s before. Source: [EPD_7in5_V2.c](https://github.com/waveshare/e-Paper/blob/master/RaspberryPi_JetsonNano/c/lib/e-Paper/EPD_7in5_V2.c).
 
 ## 4. Toolchain for the Pi
 
